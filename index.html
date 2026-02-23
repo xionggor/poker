@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CB11 POKER - Real Texas Hold'em</title>
+    <title>CB 22POKER - Real Texas Hold'em</title>
     <style>
         :root { --poker-green: #1a4a32; --gold: #ffd700; --felt: #2d6a4f; --active: #e74c3c; }
         body { background: #121212; color: white; font-family: sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; flex-direction: column; overflow: hidden;}
@@ -41,20 +41,20 @@
         .btn-fold { background: #555; color: white; }
         .btn-check { background: #3498db; color: white; }
         .btn-raise { background: var(--gold); color: black; }
-        .btn-host { background: #9b59b6; color: white; } /* 房主控制面板 */
+        .btn-host { background: #9b59b6; color: white; } 
         
         #center-start-btn { position: absolute; z-index: 50; padding: 15px 40px; font-size: 1.2rem; background: #e74c3c; color: white; border: none; border-radius: 50px; cursor: pointer; }
     </style>
 </head>
 <body>
 
-<div id="status-area">系统初始化中...</div>
+<div id="status-area">网络环境探测中...</div>
 
 <div id="poker-table">
     <div style="color: rgba(255,255,255,0.5); font-size: 12px; letter-spacing: 2px;">POT</div>
     <div id="pot-display">$0</div>
     <div id="community-cards"></div>
-    <button id="center-start-btn" disabled>寻找服务器...</button>
+    <button id="center-start-btn" disabled>引擎加载中...</button>
 </div>
 
 <div id="players-ring"></div>
@@ -63,30 +63,53 @@
     </div>
 
 <script type="module">
-    import * as PK from "https://cdn.skypack.dev/playroomkit";
+    // 1. 恢复最强防卡死加载器（多 CDN 竞速加载）
+    const sources = [
+        "https://cdn.skypack.dev/playroomkit",
+        "https://esm.run/playroomkit",
+        "https://cdn.jsdelivr.net/npm/playroomkit/dist/playroomkit.js"
+    ];
 
-    // 1. 引擎启动
-    const startBtn = document.getElementById("center-start-btn");
-    startBtn.innerText = "点击加入牌局";
-    startBtn.style.background = "#27ae60";
-    startBtn.disabled = false;
+    let PK = null;
 
-    startBtn.onclick = async function() {
-        startBtn.style.display = "none";
+    async function loadEngine() {
+        const startBtn = document.getElementById("center-start-btn");
+
+        // 并发请求，谁先连上用谁
+        const promises = sources.map(src => 
+            import(src).then(module => module.default || module)
+        );
+
         try {
-            await PK.insertCoin({ gameId: "real_texas_v1", skipLobby: false });
+            PK = await Promise.any(promises);
+            if (PK && PK.insertCoin) {
+                startBtn.innerText = "点击加入牌局";
+                startBtn.style.background = "#27ae60";
+                startBtn.disabled = false;
+                startBtn.onclick = startPlayroom;
+                document.getElementById("status-area").innerText = "引擎就绪，请加入房间。";
+            }
+        } catch (e) {
+            startBtn.innerText = "网络异常，请刷新重试";
+        }
+    }
+
+    // 2. 启动游戏大厅
+    async function startPlayroom() {
+        const startBtn = document.getElementById("center-start-btn");
+        startBtn.style.display = "none"; 
+        try {
+            await PK.insertCoin({ gameId: "real_texas_v2", skipLobby: false });
             setupGame();
         } catch (e) {
             alert("连接失败: " + e.message);
             startBtn.style.display = "inline-block";
         }
-    };
+    }
 
     function setupGame() {
-        // 每秒运行 5 次游戏循环，刷新画面
         setInterval(gameLoop, 200);
         
-        // 新玩家加入时，给予初始筹码
         PK.onPlayerJoin((player) => {
             if (player.getState("chips") === undefined) {
                 player.setState("chips", 10000, true);
@@ -95,9 +118,8 @@
         });
     }
 
-    // --- 游戏核心逻辑 ---
+    // --- 德州扑克核心规则逻辑 ---
     
-    // 生成洗好的牌
     function generateDeck() {
         const suits = ['♠', '♥', '♣', '♦'];
         const values = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
@@ -106,29 +128,26 @@
         return deck.sort(() => Math.random() - 0.5);
     }
 
-    // 房主控制：开始新一局
+    // 房主发牌
     window.hostStartHand = () => {
         if (!PK.isHost()) return;
         
         let deck = generateDeck();
         const players = PK.getPlayers();
         
-        // 重置所有人状态并下发底牌
         players.forEach(p => {
             p.setState("folded", false, true);
-            p.setState("currentBet", 0, true);
-            p.setState("hand", [deck.pop(), deck.pop()], true); // 发两张
+            p.setState("hand", [deck.pop(), deck.pop()], true); 
         });
 
-        // 设置全桌状态
         PK.setState("deck", deck, true);
-        PK.setState("board", [], true); // 公共牌清空
+        PK.setState("board", [], true); 
         PK.setState("pot", 0, true);
         PK.setState("phase", "PRE-FLOP", true);
-        PK.setState("turnIndex", 0, true); // 从第0个玩家开始行动
+        PK.setState("turnIndex", 0, true); 
     };
 
-    // 房主控制：发公共牌 (推动阶段)
+    // 房主推进阶段
     window.hostNextPhase = () => {
         if (!PK.isHost()) return;
         let phase = PK.getState("phase");
@@ -136,41 +155,38 @@
         let deck = PK.getState("deck") || [];
 
         if (phase === "PRE-FLOP") {
-            board.push(deck.pop(), deck.pop(), deck.pop()); // 发翻牌 3张
+            board.push(deck.pop(), deck.pop(), deck.pop()); 
             PK.setState("phase", "FLOP", true);
         } else if (phase === "FLOP") {
-            board.push(deck.pop()); // 发转牌 1张
+            board.push(deck.pop()); 
             PK.setState("phase", "TURN", true);
         } else if (phase === "TURN") {
-            board.push(deck.pop()); // 发河牌 1张
+            board.push(deck.pop()); 
             PK.setState("phase", "RIVER", true);
         } else if (phase === "RIVER") {
-            PK.setState("phase", "SHOWDOWN", true); // 摊牌比大小
+            PK.setState("phase", "SHOWDOWN", true); 
         }
         
         PK.setState("board", board, true);
         PK.setState("deck", deck, true);
-        
-        // 新阶段开始，回合回到第0个人
         PK.setState("turnIndex", 0, true); 
     };
 
-    // 玩家行动：弃牌
+    // 玩家弃牌
     window.playerFold = () => {
-        const me = PK.myPlayer();
-        me.setState("folded", true, true);
+        PK.myPlayer().setState("folded", true, true);
         advanceTurn();
     };
 
-    // 玩家行动：过牌/跟注
+    // 玩家过牌
     window.playerCheckCall = () => {
         advanceTurn();
     };
 
-    // 玩家行动：加注
+    // 玩家加注
     window.playerRaise = () => {
         const me = PK.myPlayer();
-        const betAmount = 100; // 暂时固定加注100
+        const betAmount = 100; 
         let chips = me.getState("chips") || 0;
         let pot = PK.getState("pot") || 0;
         
@@ -183,12 +199,11 @@
         }
     };
 
-    // 推进到下一个人
+    // 寻找下一个行动的玩家
     function advanceTurn() {
         const players = PK.getPlayers();
         let currentIndex = PK.getState("turnIndex") || 0;
         
-        // 寻找下一个没有弃牌的玩家
         let nextIndex = (currentIndex + 1) % players.length;
         let loopCount = 0;
         while (players[nextIndex].getState("folded") && loopCount < players.length) {
@@ -205,7 +220,7 @@
     function gameLoop() {
         if (!PK) return;
         const me = PK.myPlayer();
-        if (!me) return;
+        if (!me) return; // 还没加入房间时不渲染
 
         const players = PK.getPlayers();
         const phase = PK.getState("phase") || "WAITING";
@@ -213,37 +228,32 @@
         const turnIndex = PK.getState("turnIndex") || 0;
         const board = PK.getState("board") || [];
 
-        // 1. 更新顶部状态和底池
-        document.getElementById("status-area").innerText = `当前阶段: ${phase}`;
+        document.getElementById("status-area").innerHTML = `当前阶段: ${phase} <br><span style="font-size:10px; color:#aaa;">邀请链接: ${window.location.href}</span>`;
         document.getElementById("pot-display").innerText = `$${pot}`;
 
-        // 2. 渲染公共牌
         const boardHtml = board.map(c => {
             const isRed = c.s === '♥' || c.s === '♦';
             return `<div class="card ${isRed?'red':''}">${c.v}${c.s}</div>`;
         }).join("");
         document.getElementById("community-cards").innerHTML = boardHtml;
 
-        // 3. 渲染操作按钮 (核心逻辑)
         let actionHtml = "";
         
-        // 房主专属控制面板 (保持在最左边)
         if (PK.isHost()) {
             if (phase === "WAITING" || phase === "SHOWDOWN") {
                 actionHtml += `<button class="btn btn-host" onclick="hostStartHand()">▶ 开始新一局</button>`;
             } else {
-                actionHtml += `<button class="btn btn-host" onclick="hostNextPhase()">▶ 发公共牌 (推动阶段)</button>`;
+                actionHtml += `<button class="btn btn-host" onclick="hostNextPhase()">▶ 发公共牌</button>`;
             }
         }
 
-        // 玩家自己的回合面板
         const activePlayer = players[turnIndex];
         const isMyTurn = (activePlayer && activePlayer.id === me.id) && phase !== "WAITING" && phase !== "SHOWDOWN";
         
         if (isMyTurn && !me.getState("folded")) {
             actionHtml += `
                 <button class="btn btn-fold" onclick="playerFold()">弃牌 Fold</button>
-                <button class="btn btn-check" onclick="playerCheckCall()">过牌/跟注 Check</button>
+                <button class="btn btn-check" onclick="playerCheckCall()">过牌 Check</button>
                 <button class="btn btn-raise" onclick="playerRaise()">加注 $100</button>
             `;
         } else if (phase !== "WAITING" && phase !== "SHOWDOWN") {
@@ -253,7 +263,6 @@
         
         document.getElementById("action-bar").innerHTML = actionHtml;
 
-        // 4. 渲染玩家环绕
         let ringHtml = "";
         players.forEach((p, i) => {
             const prof = p.getProfile();
@@ -268,7 +277,6 @@
             const x = Math.cos(angle) * 160 + (window.innerWidth / 2) - 45;
             const y = Math.sin(angle) * 120 + (window.innerHeight / 2) - 40;
 
-            // 牌面显示：自己看正面，别人如果是Showdown阶段看正面，否则看背面
             let cardsHtml = hand.map(c => {
                 if (isMe || phase === "SHOWDOWN") {
                     const isRed = c.s === '♥' || c.s === '♦';
@@ -289,12 +297,14 @@
             `;
         });
 
-        // 比对渲染锁
         if (ringHtml !== lastRenderState) {
             document.getElementById("players-ring").innerHTML = ringHtml;
             lastRenderState = ringHtml;
         }
     }
+
+    // 启动加载器
+    loadEngine();
 </script>
 </body>
 </html>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CB P11111111111OKER - Multiplayer</title>
+    <title>CB POKER - Multiplayer</title>
     <style>
         :root { --poker-green: #1a4a32; --gold: #ffd700; --felt: #2d6a4f; }
         body { background: #121212; color: white; font-family: sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; flex-direction: column; }
@@ -16,32 +16,33 @@
             display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; 
         }
 
-        #status-area { position: absolute; top: 20px; color: var(--gold); font-size: 14px; text-align: center; width: 90%; }
+        #status-area { position: absolute; top: 20px; color: var(--gold); font-size: 14px; text-align: center; width: 90%; z-index: 10;}
         #pot-display { font-size: 2.5rem; color: var(--gold); font-weight: bold; }
         
         #players-ring { position: absolute; width: 100%; height: 100%; pointer-events: none; }
         .player-card { 
             position: absolute; background: rgba(0,0,0,0.9); border: 2px solid #555; 
-            padding: 8px; border-radius: 12px; width: 85px; text-align: center; pointer-events: auto;
+            padding: 8px; border-radius: 12px; width: 90px; text-align: center; pointer-events: auto;
         }
 
         .card-font { font-size: 18px; font-weight: bold; background: white; color: black; padding: 2px 5px; border-radius: 4px; margin: 0 2px; }
         
-        .controls { margin-top: 30px; display: flex; gap: 15px; }
+        .controls { margin-top: 30px; display: flex; gap: 15px; z-index: 10; }
         button { padding: 12px 25px; font-size: 1rem; cursor: pointer; border: none; border-radius: 50px; background: var(--gold); color: #000; font-weight: bold; }
         button:disabled { background: #444; color: #888; }
         
         /* 启动层 */
-        #overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); display:flex; align-items:center; justify-content:center; z-index:100; }
+        #overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); display:flex; flex-direction: column; align-items:center; justify-content:center; z-index:100; }
     </style>
 </head>
 <body>
 
 <div id="overlay">
-    <button id="start-engine-btn" onclick="startPlayroom()">点击进入游戏房间</button>
+    <div id="loading-text" style="color:white; margin-bottom:20px;">正在穿透网络加载引擎...</div>
+    <button id="start-engine-btn" style="display:none;" onclick="window.startPlayroom()">点击进入游戏房间</button>
 </div>
 
-<div id="status-area">等待初始化...</div>
+<div id="status-area">房间准备中...</div>
 
 <div id="poker-table">
     <div style="color: rgba(255,255,255,0.4); font-size: 12px;">POT</div>
@@ -55,46 +56,71 @@
     <button id="deal-btn" onclick="window.startDeal()">开始发牌</button>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/playroomkit/dist/playroomkit.js"></script>
+<script type="module">
+    const sources = [
+        "https://cdn.skypack.dev/playroomkit",
+        "https://esm.run/playroomkit",
+        "https://cdn.jsdelivr.net/npm/playroomkit/dist/playroomkit.js"
+    ];
 
-<script>
-    const statusEl = document.getElementById("status-area");
-    const dealBtn = document.getElementById("deal-btn");
+    let PK = null; // 用于存储引擎对象
 
-    async function startPlayroom() {
-        document.getElementById("start-engine-btn").innerText = "正在呼叫服务器...";
-        
-        try {
-            // 初始化 Playroom
-            await Playroom.insertCoin({ gameId: "cb_poker_prod_v3" });
-            
-            // 成功后隐藏遮罩
-            document.getElementById("overlay").style.display = "none";
-            statusEl.innerHTML = `房间已就绪！邀请链接已更新。`;
+    async function loadEngine() {
+        const loadingText = document.getElementById("loading-text");
+        const startBtn = document.getElementById("start-engine-btn");
 
-            setupGame();
-        } catch (e) {
-            alert("启动失败，请检查网络: " + e.message);
+        // 尝试多个源加载
+        for (const src of sources) {
+            try {
+                const module = await import(src);
+                PK = module.default || module;
+                if (PK && PK.insertCoin) {
+                    // 加载成功，显示按钮
+                    loadingText.style.display = "none";
+                    startBtn.style.display = "inline-block";
+                    return;
+                }
+            } catch (e) {
+                console.warn("源拦截:", src);
+            }
         }
+        loadingText.innerText = "加载失败，请检查浏览器插件或网络。";
     }
 
+    // 点击按钮后触发
+    window.startPlayroom = async function() {
+        document.getElementById("start-engine-btn").innerText = "连接中...";
+        try {
+            await PK.insertCoin({ gameId: "cb_poker_prod_final", skipLobby: false });
+            // 成功后隐藏黑屏遮罩
+            document.getElementById("overlay").style.display = "none";
+            document.getElementById("status-area").innerHTML = `分享此链接邀请好友: <br><span style="color:#fff;font-size:12px;">${window.location.href}</span>`;
+            setupGame();
+        } catch (e) {
+            alert("启动失败: " + e.message);
+            document.getElementById("start-engine-btn").innerText = "重试";
+        }
+    };
+
     function setupGame() {
-        if (!Playroom.isHost()) {
+        const dealBtn = document.getElementById("deal-btn");
+        // 只有第一个进来的人(房主)可以发牌
+        if (!PK.isHost()) {
             dealBtn.disabled = true;
-            dealBtn.innerText = "等待房主...";
+            dealBtn.innerText = "等待房主发牌";
         }
 
-        Playroom.onPlayerJoin(renderUI);
-        Playroom.onStateChange("pot", (val) => {
+        PK.onPlayerJoin(renderUI);
+        PK.onStateChange("pot", (val) => {
             document.getElementById("pot-display").innerText = `$${val || 0}`;
         });
-        Playroom.onStateChange("gameRound", renderUI);
+        PK.onStateChange("gameRound", renderUI);
         renderUI();
     }
 
-    // 发牌逻辑
+    // 洗牌与发牌
     window.startDeal = () => {
-        if (!Playroom.isHost()) return;
+        if (!PK.isHost()) return;
         
         let deck = [];
         const suits = ['♠', '♥', '♣', '♦'];
@@ -102,24 +128,24 @@
         suits.forEach(s => values.forEach(v => deck.push(v + s)));
         deck.sort(() => Math.random() - 0.5);
 
-        const players = Playroom.getPlayers();
+        const players = PK.getPlayers();
         players.forEach(p => {
-            p.setState("hand", [deck.pop(), deck.pop()]);
+            p.setState("hand", [deck.pop(), deck.pop()]); // 发两张牌
         });
 
-        const round = Playroom.getState("gameRound") || 0;
-        Playroom.setState("gameRound", round + 1, true);
-        Playroom.setState("pot", 0, true);
+        const round = PK.getState("gameRound") || 0;
+        PK.setState("gameRound", round + 1, true); // 触发刷新
+        PK.setState("pot", 0, true); // 清空底池
     };
 
     window.makeBet = (amount) => {
-        const current = Playroom.getState("pot") || 0;
-        Playroom.setState("pot", current + amount, true);
+        const current = PK.getState("pot") || 0;
+        PK.setState("pot", current + amount, true);
     };
 
     function renderUI() {
-        const players = Playroom.getPlayers();
-        const me = Playroom.myPlayer();
+        const players = PK.getPlayers();
+        const me = PK.myPlayer();
         const ring = document.getElementById("players-ring");
         ring.innerHTML = "";
 
@@ -128,6 +154,7 @@
             const hand = p.getState("hand") || [];
             const isMe = p.id === me.id;
 
+            // 数学计算让玩家围坐在桌子旁
             const angle = (i / players.length) * Math.PI * 2 + Math.PI/2;
             const x = Math.cos(angle) * 160 + (window.innerWidth / 2) - 45;
             const y = Math.sin(angle) * 120 + (window.innerHeight / 2) - 40;
@@ -138,6 +165,7 @@
             div.style.top = `${y}px`;
             div.style.borderColor = prof.color;
 
+            // 渲染手牌：自己看正面，别人看背面
             const cardsHtml = hand.map(card => {
                 if (isMe) {
                     const isRed = card.includes('♥') || card.includes('♦');
@@ -147,12 +175,15 @@
             }).join("");
 
             div.innerHTML = `
-                <div style="color:${prof.color}; font-size:10px;">${prof.name}</div>
-                <div style="margin-top:5px; display:flex; justify-content:center;">${cardsHtml || '<span style="color:#666; font-size:10px;">...</span>'}</div>
+                <div style="color:${prof.color}; font-size:10px;">${prof.name} ${isMe?'(你)':''}</div>
+                <div style="margin-top:5px; display:flex; justify-content:center;">${cardsHtml || '<span style="color:#666; font-size:10px;">等待发牌</span>'}</div>
             `;
             ring.appendChild(div);
         });
     }
+
+    // 页面开启时，启动加载流程
+    loadEngine();
 </script>
 </body>
 </html>

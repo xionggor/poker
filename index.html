@@ -1,75 +1,45 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <title>CB POKER DEBUG</title>
+    <title>CB POKER - FIX MODE</title>
     <style>
-        body { background: #121212; color: white; text-align: center; font-family: sans-serif; padding-top: 50px; }
-        #status { color: gold; margin-bottom: 20px; font-weight: bold; }
-        #start-btn { padding: 15px 30px; font-size: 1.1rem; background: #27ae60; color: white; border: none; border-radius: 8px; cursor: pointer; display: none; }
-        .log { font-size: 12px; color: #888; margin-top: 20px; text-align: left; display: inline-block; width: 80%; }
+        body { background: #121212; color: white; text-align: center; font-family: sans-serif; padding-top: 100px; }
+        #status { color: gold; font-size: 1.2rem; margin-bottom: 20px; }
+        #start-btn { padding: 15px 30px; font-size: 1rem; background: #27ae60; color: white; border: none; border-radius: 8px; cursor: pointer; }
     </style>
 </head>
 <body>
 
-    <div id="status">正在尝试多种渠道加载引擎...</div>
-    <button id="start-btn" onclick="connectGame()">点击进入游戏</button>
-    <div id="log-box" class="log"></div>
+    <div id="status">正在准备游戏环境...</div>
+    <button id="start-btn" onclick="connectGame()">进入游戏</button>
+
+    <script src="playroomkit.js"></script>
 
     <script>
-        const logBox = document.getElementById("log-box");
-        function addLog(msg) { logBox.innerHTML += `> ${msg}<br>`; }
-
-        // 尝试加载脚本的函数
-        function loadScript(url) {
-            return new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = url;
-                script.onload = resolve;
-                script.onerror = reject;
-                document.head.appendChild(script);
-            });
-        }
-
-        // 核心加载序列
-        async function boot() {
-            const btn = document.getElementById("start-btn");
+        // 检查脚本加载状态
+        window.onload = function() {
             const status = document.getElementById("status");
-
-            const sources = [
-                "https://cdn.jsdelivr.net/npm/playroomkit/dist/playroomkit.js",
-                "https://unpkg.com/playroomkit/dist/playroomkit.js",
-                "https://cdnjs.cloudflare.com/ajax/libs/playroomkit/0.0.12/playroomkit.js" // 备用源
-            ];
-
-            for (let src of sources) {
-                try {
-                    addLog(`正在尝试源: ${src.split('/')[2]}...`);
-                    await loadScript(src);
-                    if (typeof Playroom !== 'undefined') {
-                        status.innerText = "✅ 引擎载入成功！";
-                        btn.style.display = "inline-block";
-                        addLog("成功找到 Playroom 对象。");
-                        return;
-                    }
-                } catch (e) {
-                    addLog(`失败：${src.split('/')[2]}`);
-                }
+            if (typeof Playroom !== 'undefined') {
+                status.innerText = "✅ 引擎已就绪";
+                console.log("Playroom Loaded Successfully");
+            } else {
+                status.innerText = "❌ 找不到 playroomkit.js 文件";
+                console.log("Playroom Load Failed");
             }
-            status.innerText = "❌ 所有源均加载失败";
-            addLog("请尝试：1. 检查浏览器隐私模式 2. 尝试用手机网络（Hotspot） 3. 检查 GitHub 仓库是否含有特殊的 .nojekyll 文件。");
-        }
+        };
 
         async function connectGame() {
             try {
-                await Playroom.insertCoin({ gameId: "cbpoker_2026" });
-                document.getElementById("status").innerText = "🎉 连接成功！";
+                // 启动引擎
+                await Playroom.insertCoin({
+                    gameId: "cbpoker_production_v1"
+                });
+                document.getElementById("status").innerText = "🎉 已连接到多人服务器！";
             } catch (e) {
-                addLog("连接服务器失败：" + e.message);
+                alert("连接失败: " + e.message);
             }
         }
-
-        window.onload = boot;
     </script>
 </body>
 </html>

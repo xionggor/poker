@@ -3,308 +3,118 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CB 22POKER - Real Texas Hold'em</title>
+    <title>CB POKER - 私人局大厅</title>
     <style>
-        :root { --poker-green: #1a4a32; --gold: #ffd700; --felt: #2d6a4f; --active: #e74c3c; }
-        body { background: #121212; color: white; font-family: sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; flex-direction: column; overflow: hidden;}
-        
-        #poker-table { 
-            width: 85vw; height: 45vh; max-width: 650px; 
-            background: radial-gradient(circle, var(--felt) 0%, #1b4332 100%); 
-            border: 10px solid #3d2b1f; border-radius: 200px; 
-            box-shadow: 0 20px 50px rgba(0,0,0,0.6), inset 0 0 30px rgba(0,0,0,0.5); 
-            display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; 
-        }
-
-        #status-area { position: absolute; top: 15px; color: var(--gold); font-size: 14px; text-align: center; width: 90%; z-index: 10; font-weight: bold;}
-        #pot-display { font-size: 2.5rem; color: var(--gold); font-weight: bold; margin-bottom: 15px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);}
-        
-        #community-cards { display: flex; gap: 8px; min-height: 60px; }
-        .card { background: white; color: black; padding: 10px 15px; border-radius: 6px; font-size: 20px; font-weight: bold; box-shadow: 2px 2px 5px rgba(0,0,0,0.5); display: inline-block;}
-        .card.red { color: #d32f2f; }
-        .card.hidden { background: #555; color: #555; border: 1px solid #777; }
-
-        #players-ring { position: absolute; width: 100%; height: 100%; pointer-events: none; }
-        .player-card { 
-            position: absolute; background: rgba(0,0,0,0.85); border: 2px solid #555; 
-            padding: 10px; border-radius: 12px; width: 90px; text-align: center; pointer-events: auto;
-            transition: all 0.3s;
-        }
-        /* 当前回合发光特效 */
-        .player-card.active-turn { border-color: var(--active); box-shadow: 0 0 15px var(--active); transform: scale(1.1); }
-        .player-card.folded { opacity: 0.4; }
-
-        /* 玩家操作区 */
-        #action-bar { margin-top: 30px; display: flex; gap: 15px; height: 50px; align-items: center;}
-        .btn { padding: 12px 25px; font-size: 1rem; cursor: pointer; border: none; border-radius: 50px; font-weight: bold; transition: 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.3);}
-        .btn:active { transform: scale(0.95); }
-        .btn-fold { background: #555; color: white; }
-        .btn-check { background: #3498db; color: white; }
-        .btn-raise { background: var(--gold); color: black; }
-        .btn-host { background: #9b59b6; color: white; } 
-        
-        #center-start-btn { position: absolute; z-index: 50; padding: 15px 40px; font-size: 1.2rem; background: #e74c3c; color: white; border: none; border-radius: 50px; cursor: pointer; }
+        :root { --poker-green: #1a4a32; --gold: #ffd700; --bg: #121212; }
+        body { background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+        .card { background: #222; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 350px; text-align: center; border: 1px solid #333; }
+        h1 { color: var(--gold); margin-bottom: 30px; letter-spacing: 2px; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #444; background: #333; color: white; box-sizing: border-box; }
+        button { width: 100%; padding: 15px; margin-top: 20px; border-radius: 50px; border: none; font-weight: bold; cursor: pointer; font-size: 1rem; transition: 0.3s; }
+        .btn-create { background: var(--gold); color: black; }
+        .btn-join { background: #3498db; color: white; }
+        .hidden { display: none; }
+        #player-list { margin-top: 20px; text-align: left; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; }
+        .player-item { padding: 8px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; }
+        .share-box { background: #333; padding: 10px; border-radius: 8px; margin-top: 15px; font-size: 12px; color: var(--gold); word-break: break-all; }
     </style>
 </head>
 <body>
 
-<div id="status-area">网络环境探测中...</div>
-
-<div id="poker-table">
-    <div style="color: rgba(255,255,255,0.5); font-size: 12px; letter-spacing: 2px;">POT</div>
-    <div id="pot-display">$0</div>
-    <div id="community-cards"></div>
-    <button id="center-start-btn" disabled>引擎加载中...</button>
-</div>
-
-<div id="players-ring"></div>
-
-<div id="action-bar">
+    <div id="lobby-view" class="card">
+        <h1>CB POKER</h1>
+        <p id="lobby-msg">创建你的私人德州房间</p>
+        <button id="create-btn" class="btn-create" onclick="createRoom()">创建新房间</button>
     </div>
 
-<script type="module">
-    // 1. 恢复最强防卡死加载器（多 CDN 竞速加载）
-    const sources = [
-        "https://cdn.skypack.dev/playroomkit",
-        "https://esm.run/playroomkit",
-        "https://cdn.jsdelivr.net/npm/playroomkit/dist/playroomkit.js"
-    ];
+    <div id="join-view" class="card hidden">
+        <h1>准备入座</h1>
+        <input type="text" id="name-input" placeholder="输入你的昵称...">
+        <button class="btn-join" onclick="joinRoom()">入座等待</button>
+    </div>
 
-    let PK = null;
+    <div id="game-view" class="card hidden">
+        <h2 id="room-status">等待中...</h2>
+        <div id="player-list"></div>
+        <div class="share-box" id="share-link"></div>
+        <button id="start-btn" class="btn-create hidden" onclick="startGame()">开始游戏</button>
+    </div>
 
-    async function loadEngine() {
-        const startBtn = document.getElementById("center-start-btn");
-
-        // 并发请求，谁先连上用谁
-        const promises = sources.map(src => 
-            import(src).then(module => module.default || module)
-        );
-
-        try {
-            PK = await Promise.any(promises);
-            if (PK && PK.insertCoin) {
-                startBtn.innerText = "点击加入牌局";
-                startBtn.style.background = "#27ae60";
-                startBtn.disabled = false;
-                startBtn.onclick = startPlayroom;
-                document.getElementById("status-area").innerText = "引擎就绪，请加入房间。";
-            }
-        } catch (e) {
-            startBtn.innerText = "网络异常，请刷新重试";
-        }
-    }
-
-    // 2. 启动游戏大厅
-    async function startPlayroom() {
-        const startBtn = document.getElementById("center-start-btn");
-        startBtn.style.display = "none"; 
-        try {
-            await PK.insertCoin({ gameId: "real_texas_v2", skipLobby: false });
-            setupGame();
-        } catch (e) {
-            alert("连接失败: " + e.message);
-            startBtn.style.display = "inline-block";
-        }
-    }
-
-    function setupGame() {
-        setInterval(gameLoop, 200);
-        
-        PK.onPlayerJoin((player) => {
-            if (player.getState("chips") === undefined) {
-                player.setState("chips", 10000, true);
-                player.setState("folded", false, true);
-            }
-        });
-    }
-
-    // --- 德州扑克核心规则逻辑 ---
+<script>
+    // 你的 Cloudflare 后端地址
+    const BACKEND_URL = "https://poker-server.zxc717209554.workers.dev";
     
-    function generateDeck() {
-        const suits = ['♠', '♥', '♣', '♦'];
-        const values = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
-        let deck = [];
-        for (let s of suits) { for (let v of values) { deck.push({s, v}); } }
-        return deck.sort(() => Math.random() - 0.5);
+    let ws = null;
+    let roomId = new URLSearchParams(window.location.search).get("room");
+    let isOwner = false;
+
+    // 初始化检查
+    window.onload = () => {
+        if (roomId) {
+            document.getElementById("lobby-msg").innerText = "已发现房间: " + roomId.substring(0,8);
+            showView("join-view");
+        }
+    };
+
+    // 1. 创建房间
+    async function createRoom() {
+        try {
+            const res = await fetch(`${BACKEND_URL}/create-room`, { method: "POST" });
+            const data = await res.json();
+            roomId = data.roomId;
+            isOwner = true;
+            window.history.pushState({}, "", `?room=${roomId}`);
+            showView("join-view");
+        } catch (e) {
+            alert("无法连接到服务器，请检查 Worker 是否正常运行");
+        }
     }
 
-    // 房主发牌
-    window.hostStartHand = () => {
-        if (!PK.isHost()) return;
-        
-        let deck = generateDeck();
-        const players = PK.getPlayers();
-        
-        players.forEach(p => {
-            p.setState("folded", false, true);
-            p.setState("hand", [deck.pop(), deck.pop()], true); 
-        });
+    // 2. 加入房间 (WebSocket)
+    function joinRoom() {
+        const name = document.getElementById("name-input").value.trim();
+        if (!name) return alert("请输入名字");
 
-        PK.setState("deck", deck, true);
-        PK.setState("board", [], true); 
-        PK.setState("pot", 0, true);
-        PK.setState("phase", "PRE-FLOP", true);
-        PK.setState("turnIndex", 0, true); 
-    };
+        const wsUrl = BACKEND_URL.replace("https://", "wss://") + `?roomId=${roomId}`;
+        ws = new WebSocket(wsUrl);
 
-    // 房主推进阶段
-    window.hostNextPhase = () => {
-        if (!PK.isHost()) return;
-        let phase = PK.getState("phase");
-        let board = PK.getState("board") || [];
-        let deck = PK.getState("deck") || [];
+        ws.onopen = () => {
+            ws.send(JSON.stringify({ type: "JOIN", name: name }));
+            showView("game-view");
+            document.getElementById("share-link").innerText = "邀请好友: " + window.location.href;
+            if (isOwner) document.getElementById("start-btn").classList.remove("hidden");
+        };
 
-        if (phase === "PRE-FLOP") {
-            board.push(deck.pop(), deck.pop(), deck.pop()); 
-            PK.setState("phase", "FLOP", true);
-        } else if (phase === "FLOP") {
-            board.push(deck.pop()); 
-            PK.setState("phase", "TURN", true);
-        } else if (phase === "TURN") {
-            board.push(deck.pop()); 
-            PK.setState("phase", "RIVER", true);
-        } else if (phase === "RIVER") {
-            PK.setState("phase", "SHOWDOWN", true); 
-        }
-        
-        PK.setState("board", board, true);
-        PK.setState("deck", deck, true);
-        PK.setState("turnIndex", 0, true); 
-    };
-
-    // 玩家弃牌
-    window.playerFold = () => {
-        PK.myPlayer().setState("folded", true, true);
-        advanceTurn();
-    };
-
-    // 玩家过牌
-    window.playerCheckCall = () => {
-        advanceTurn();
-    };
-
-    // 玩家加注
-    window.playerRaise = () => {
-        const me = PK.myPlayer();
-        const betAmount = 100; 
-        let chips = me.getState("chips") || 0;
-        let pot = PK.getState("pot") || 0;
-        
-        if (chips >= betAmount) {
-            me.setState("chips", chips - betAmount, true);
-            PK.setState("pot", pot + betAmount, true);
-            advanceTurn();
-        } else {
-            alert("筹码不足！");
-        }
-    };
-
-    // 寻找下一个行动的玩家
-    function advanceTurn() {
-        const players = PK.getPlayers();
-        let currentIndex = PK.getState("turnIndex") || 0;
-        
-        let nextIndex = (currentIndex + 1) % players.length;
-        let loopCount = 0;
-        while (players[nextIndex].getState("folded") && loopCount < players.length) {
-            nextIndex = (nextIndex + 1) % players.length;
-            loopCount++;
-        }
-        
-        PK.setState("turnIndex", nextIndex, true);
-    }
-
-    // --- 界面渲染引擎 ---
-    let lastRenderState = "";
-
-    function gameLoop() {
-        if (!PK) return;
-        const me = PK.myPlayer();
-        if (!me) return; // 还没加入房间时不渲染
-
-        const players = PK.getPlayers();
-        const phase = PK.getState("phase") || "WAITING";
-        const pot = PK.getState("pot") || 0;
-        const turnIndex = PK.getState("turnIndex") || 0;
-        const board = PK.getState("board") || [];
-
-        document.getElementById("status-area").innerHTML = `当前阶段: ${phase} <br><span style="font-size:10px; color:#aaa;">邀请链接: ${window.location.href}</span>`;
-        document.getElementById("pot-display").innerText = `$${pot}`;
-
-        const boardHtml = board.map(c => {
-            const isRed = c.s === '♥' || c.s === '♦';
-            return `<div class="card ${isRed?'red':''}">${c.v}${c.s}</div>`;
-        }).join("");
-        document.getElementById("community-cards").innerHTML = boardHtml;
-
-        let actionHtml = "";
-        
-        if (PK.isHost()) {
-            if (phase === "WAITING" || phase === "SHOWDOWN") {
-                actionHtml += `<button class="btn btn-host" onclick="hostStartHand()">▶ 开始新一局</button>`;
-            } else {
-                actionHtml += `<button class="btn btn-host" onclick="hostNextPhase()">▶ 发公共牌</button>`;
+        ws.onmessage = (event) => {
+            const state = JSON.parse(event.data);
+            renderPlayers(state.players);
+            if (state.status === "PLAYING") {
+                document.getElementById("room-status").innerText = "🃏 游戏已开始！";
             }
-        }
-
-        const activePlayer = players[turnIndex];
-        const isMyTurn = (activePlayer && activePlayer.id === me.id) && phase !== "WAITING" && phase !== "SHOWDOWN";
-        
-        if (isMyTurn && !me.getState("folded")) {
-            actionHtml += `
-                <button class="btn btn-fold" onclick="playerFold()">弃牌 Fold</button>
-                <button class="btn btn-check" onclick="playerCheckCall()">过牌 Check</button>
-                <button class="btn btn-raise" onclick="playerRaise()">加注 $100</button>
-            `;
-        } else if (phase !== "WAITING" && phase !== "SHOWDOWN") {
-            const activeName = activePlayer ? activePlayer.getProfile().name : "...";
-            actionHtml += `<div style="color:#aaa;">等待 ${activeName} 行动...</div>`;
-        }
-        
-        document.getElementById("action-bar").innerHTML = actionHtml;
-
-        let ringHtml = "";
-        players.forEach((p, i) => {
-            const prof = p.getProfile();
-            const hand = p.getState("hand") || [];
-            const chips = p.getState("chips") || 0;
-            const folded = p.getState("folded") || false;
-            
-            const isMe = p.id === me.id;
-            const isActive = (i === turnIndex) && (phase !== "WAITING" && phase !== "SHOWDOWN");
-
-            const angle = (i / players.length) * Math.PI * 2 + Math.PI/2;
-            const x = Math.cos(angle) * 160 + (window.innerWidth / 2) - 45;
-            const y = Math.sin(angle) * 120 + (window.innerHeight / 2) - 40;
-
-            let cardsHtml = hand.map(c => {
-                if (isMe || phase === "SHOWDOWN") {
-                    const isRed = c.s === '♥' || c.s === '♦';
-                    return `<span class="card-font" style="color:${isRed?'red':'black'}; font-size:14px;">${c.v}${c.s}</span>`;
-                }
-                return `<span class="card-font hidden" style="font-size:14px;">??</span>`;
-            }).join("");
-            
-            if (folded) cardsHtml = "<span style='color:red; font-size:12px;'>已弃牌</span>";
-
-            ringHtml += `
-                <div class="player-card ${isActive ? 'active-turn' : ''} ${folded ? 'folded' : ''}" 
-                     style="left:${x}px; top:${y}px; border-color:${prof.color};">
-                    <div style="color:${prof.color}; font-size:11px; white-space:nowrap; overflow:hidden;">${prof.name}</div>
-                    <div style="color:var(--gold); font-size:12px; margin:3px 0;">$${chips}</div>
-                    <div style="display:flex; justify-content:center;">${cardsHtml || '<span style="color:#666; font-size:10px;">未发牌</span>'}</div>
-                </div>
-            `;
-        });
-
-        if (ringHtml !== lastRenderState) {
-            document.getElementById("players-ring").innerHTML = ringHtml;
-            lastRenderState = ringHtml;
-        }
+        };
     }
 
-    // 启动加载器
-    loadEngine();
+    // 3. 开始游戏
+    function startGame() {
+        if (ws) ws.send(JSON.stringify({ type: "START_GAME" }));
+    }
+
+    function showView(viewId) {
+        ["lobby-view", "join-view", "game-view"].forEach(id => {
+            document.getElementById(id).classList.add("hidden");
+        });
+        document.getElementById(viewId).classList.remove("hidden");
+    }
+
+    function renderPlayers(players) {
+        const list = document.getElementById("player-list");
+        list.innerHTML = "<strong>已入座:</strong>" + players.map(p => `
+            <div class="player-item">
+                <span>${p.name}</span>
+                <span style="color:#ffd700">$${p.chips}</span>
+            </div>
+        `).join("");
+    }
 </script>
 </body>
 </html>

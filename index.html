@@ -12,111 +12,67 @@
         #pot-display { font-size: 2rem; color: var(--gold); font-weight: bold; }
         #room-link { position: absolute; top: 10px; background: rgba(255,255,255,0.1); padding: 8px; border-radius: 5px; font-size: 11px; max-width: 90%; word-break: break-all; text-align: center; }
         #players-ring { position: absolute; width: 100%; height: 100%; pointer-events: none; }
-        .player-card { position: absolute; background: rgba(0,0,0,0.8); border: 1px solid var(--gold); padding: 8px; border-radius: 8px; width: 85px; text-align: center; transition: all 0.3s; }
+        .player-card { position: absolute; background: rgba(0,0,0,0.8); border: 1px solid var(--gold); padding: 8px; border-radius: 8px; width: 85px; text-align: center; }
         .controls { position: fixed; bottom: 30px; display: flex; gap: 10px; }
         button { padding: 12px 20px; font-size: 14px; cursor: pointer; border: none; border-radius: 25px; background: var(--gold); color: #000; font-weight: bold; }
-        button.reset { background: #ff4d4d; color: white; }
     </style>
 </head>
 <body>
 
 <div id="table-container">
-    <div id="room-link">正在连接多人服务器，请稍候...</div>
+    <div id="room-link">正在初始化多人引擎，请稍候...</div>
     <div id="poker-table">
-        <div style="color: rgba(255,255,255,0.5); font-size: 12px;">POT</div>
         <div id="pot-display">$0</div>
     </div>
     <div id="players-ring"></div>
     <div class="controls">
-        <button onclick="handleBet(100)">下注 $100</button>
-        <button onclick="handleBet(500)">下注 $500</button>
-        <button class="reset" onclick="resetGame()">重置</button>
+        <button id="betBtn">下注 $100</button>
+        <button id="startBtn" style="background:white">开始发牌</button>
     </div>
 </div>
 
-<script src="https://unpkg.com/playroomkit/dist/playroomkit.js"></script>
+<script type="module">
+    import { insertCoin, onPlayerJoin, getState, setState, myPlayer, getPlayers, isHost, onStateChange } 
+    from "https://cdn.jsdelivr.net/npm/playroomkit/dist/playroomkit.js";
 
-<script>
-    // 使用一个标志位确保只初始化一次
-    let isInitialized = false;
+    const linkEl = document.getElementById("room-link");
+    const potEl = document.getElementById("pot-display");
 
-    async function startApp() {
-        if (typeof Playroom === 'undefined') {
-            document.getElementById("room-link").innerText = "无法加载引擎，请检查网络或刷新页面";
-            return;
-        }
-
-        if (isInitialized) return;
-        isInitialized = true;
-
+    async function init() {
         try {
-            // 初始化 Playroom
-            await Playroom.insertCoin();
-            document.getElementById("room-link").innerHTML = `复制链接给好友: <span style="color:var(--gold)">${window.location.href}</span>`;
+            // 启动引擎
+            await insertCoin();
+            linkEl.innerHTML = `房间已就绪！分享链接: <span style="color:var(--gold)">${window.location.href}</span>`;
 
-            // 监听
-            Playroom.onPlayerJoin(updateUI);
-            Playroom.onStateChange("pot", (newPot) => {
-                document.getElementById("pot-display").innerText = `$${newPot || 0}`;
-            });
+            // 绑定按钮事件
+            document.getElementById("betBtn").onclick = () => {
+                const currentPot = getState("pot") || 0;
+                setState("pot", currentPot + 100, true);
+            };
+
+            document.getElementById("startBtn").onclick = startNewRound;
+
+            // 监听状态
+            onPlayerJoin(updateUI);
+            onStateChange("pot", (val) => { potEl.innerText = `$${val || 0}`; });
             
-            updateUI(); // 初始渲染
-        } catch (e) {
-            console.error(e);
-            document.getElementById("room-link").innerText = "连接失败: " + e.message;
-        }
-    }
-
-    // 处理下注
-    function handleBet(amount) {
-        if (typeof Playroom === 'undefined') return;
-        const currentPot = Playroom.getState("pot") || 0;
-        Playroom.setState("pot", currentPot + amount, true);
-        
-        const me = Playroom.myPlayer();
-        const myChips = me.getState("chips") || 5000;
-        me.setState("chips", myChips - amount);
-        updateUI();
-    }
-
-    // 重置
-    function resetGame() {
-        if (typeof Playroom !== 'undefined' && Playroom.isHost()) {
-            Playroom.setState("pot", 0, true);
-            Playroom.getPlayers().forEach(p => p.setState("chips", 5000));
             updateUI();
+        } catch (e) {
+            linkEl.innerText = "引擎连接失败，请检查是否被浏览器插件拦截。";
+            console.error(p);
         }
     }
 
     function updateUI() {
-        if (typeof Playroom === 'undefined') return;
-        const players = Playroom.getPlayers();
+        const players = getPlayers();
         const ring = document.getElementById("players-ring");
         ring.innerHTML = "";
-
-        players.forEach((p, index) => {
-            const profile = p.getProfile();
-            const chips = p.getState("chips") || 5000;
-            const angle = (index / players.length) * Math.PI * 2;
-            
+        players.forEach((p, i) => {
+            const prof = p.getProfile();
+            const angle = (i / players.length) * Math.PI * 2;
             const x = Math.cos(angle) * 160 + (window.innerWidth / 2) - 45;
             const y = Math.sin(angle) * 130 + (window.innerHeight / 2) - 35;
 
             const div = document.createElement("div");
             div.className = "player-card";
-            div.style.left = `${x}px`;
-            div.style.top = `${y}px`;
-            div.style.borderColor = profile.color;
-            div.innerHTML = `
-                <div style="font-size:10px; color:${profile.color}">${profile.name}</div>
-                <div style="font-size:14px;">$${chips}</div>
-            `;
-            ring.appendChild(div);
-        });
-    }
-
-    // 关键：等页面完全加载后再启动
-    window.onload = startApp;
-</script>
-</body>
-</html>
+            div

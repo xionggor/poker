@@ -2,46 +2,56 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>CB POKER TEST</title>
+    <title>CB POKER DEBUG</title>
+    <script src="https://unpkg.com/playroomkit@0.0.12/dist/playroomkit.js" crossorigin="anonymous"></script>
     <style>
-        body { background: #121212; color: white; text-align: center; font-family: sans-serif; }
-        #status { padding: 20px; color: gold; }
-        #start-btn { padding: 20px 40px; font-size: 20px; background: #27ae60; color: white; border: none; border-radius: 10px; cursor: pointer; }
+        body { background: #121212; color: white; text-align: center; font-family: sans-serif; padding-top: 50px; }
+        #status { color: gold; margin-bottom: 20px; padding: 0 20px; }
+        #start-btn { padding: 20px 40px; font-size: 1.2rem; background: #27ae60; color: white; border: none; border-radius: 10px; cursor: pointer; }
+        #start-btn:disabled { background: #555; cursor: not-allowed; }
+        .error-msg { color: #ff4d4d; font-size: 14px; margin-top: 10px; }
     </style>
 </head>
 <body>
-    <div id="status">第一步：请点击下方按钮启动多人引擎</div>
-    <button id="start-btn" onclick="connectGame()">点击进入游戏</button>
 
-    <script src="https://unpkg.com/playroomkit/dist/playroomkit.js"></script>
+    <div id="status">正在检查游戏引擎加载状态...</div>
+    <button id="start-btn" onclick="connectGame()">点击进入游戏</button>
+    <div id="debug-info" class="error-msg"></div>
 
     <script>
-        async function connectGame() {
+        // 检查脚本是否加载成功
+        window.onload = function() {
             const btn = document.getElementById("start-btn");
             const status = document.getElementById("status");
             
-            btn.innerText = "正在连接...";
-            status.innerText = "正在尝试连接 Playroom 服务器...";
+            if (typeof Playroom !== 'undefined') {
+                status.innerText = "✅ 引擎加载成功！请点击下方按钮开始。";
+                console.log("Playroom 载入成功");
+            } else {
+                status.innerText = "❌ 引擎加载失败！";
+                document.getElementById("debug-info").innerText = "原因：无法从 CDN 获取 Playroom 脚本。请检查是否有广告拦截器（AdBlock）屏蔽了脚本，或尝试切换网络。";
+                btn.disabled = true;
+                btn.style.background = "#333";
+            }
+        };
+
+        async function connectGame() {
+            const status = document.getElementById("status");
+            status.innerText = "正在呼叫服务器，请稍后...";
 
             try {
-                // 尝试初始化
+                // 启动引擎
                 await Playroom.insertCoin({
-                    gameId: "cbpoker_test_123",
+                    gameId: "cb_poker_v1",
                     skipLobby: false
                 });
                 
-                status.innerText = "连接成功！";
-                btn.style.display = "none";
-                
-                // 连接成功后的逻辑
-                Playroom.onPlayerJoin(() => {
-                    status.innerText = "玩家已加入，当前底池: $" + (Playroom.getState("pot") || 0);
-                });
+                status.innerText = "🎉 连接成功！";
+                document.getElementById("start-btn").style.display = "none";
 
             } catch (e) {
-                console.error(e);
-                status.innerText = "连接失败，原因: " + e.message;
-                btn.innerText = "重试";
+                status.innerText = "连接出错！";
+                document.getElementById("debug-info").innerText = e.message;
             }
         }
     </script>

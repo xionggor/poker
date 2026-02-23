@@ -6,118 +6,120 @@
     <title>CB POKER - Multiplayer</title>
     <style>
         :root { --poker-green: #1a4a32; --gold: #ffd700; --felt: #2d6a4f; }
-        body { background: #121212; color: white; font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
+        body { background: #121212; color: white; font-family: sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; flex-direction: column; }
         
-        /* 牌桌设计 */
         #poker-table { 
-            width: 85vw; height: 45vh; max-width: 700px; 
+            width: 85vw; height: 45vh; max-width: 650px; 
             background: radial-gradient(circle, var(--felt) 0%, #1b4332 100%); 
-            border: 12px solid #3d2b1f; border-radius: 200px; 
+            border: 10px solid #3d2b1f; border-radius: 200px; 
             box-shadow: 0 20px 50px rgba(0,0,0,0.6); 
             display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; 
         }
 
-        #pot-display { font-size: 2.5rem; color: var(--gold); font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
-        #room-link { position: absolute; top: 15px; background: rgba(0,0,0,0.4); padding: 8px 15px; border-radius: 20px; font-size: 12px; color: var(--gold); border: 1px solid var(--gold); }
-
-        /* 玩家环绕布局 */
+        #status-area { position: absolute; top: 20px; color: var(--gold); font-size: 14px; text-align: center; width: 90%; }
+        #pot-display { font-size: 2.5rem; color: var(--gold); font-weight: bold; }
+        
         #players-ring { position: absolute; width: 100%; height: 100%; pointer-events: none; }
         .player-card { 
-            position: absolute; background: rgba(0,0,0,0.85); border: 2px solid #555; 
-            padding: 10px; border-radius: 12px; width: 90px; text-align: center; 
-            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); pointer-events: auto;
+            position: absolute; background: rgba(0,0,0,0.9); border: 2px solid #555; 
+            padding: 8px; border-radius: 12px; width: 85px; text-align: center; pointer-events: auto;
         }
 
-        /* 扑克牌样式 */
-        .card-font { font-size: 20px; font-weight: bold; background: white; color: black; padding: 2px 5px; border-radius: 4px; margin: 0 2px; }
-        .card-back { background: #7b2cbf; color: #7b2cbf; border: 1px solid white; }
-
-        /* 控制按钮 */
-        .controls { position: fixed; bottom: 40px; display: flex; gap: 15px; }
-        button { 
-            padding: 15px 30px; font-size: 1rem; cursor: pointer; border: none; border-radius: 50px; 
-            background: var(--gold); color: #000; font-weight: bold; box-shadow: 0 4px 15px rgba(255,215,0,0.3);
-        }
-        button:disabled { background: #444; color: #888; cursor: not-allowed; box-shadow: none; }
-        #deal-btn { background: #ffffff; }
+        .card-font { font-size: 18px; font-weight: bold; background: white; color: black; padding: 2px 5px; border-radius: 4px; margin: 0 2px; }
+        
+        .controls { margin-top: 30px; display: flex; gap: 15px; }
+        button { padding: 12px 25px; font-size: 1rem; cursor: pointer; border: none; border-radius: 50px; background: var(--gold); color: #000; font-weight: bold; }
+        button:disabled { background: #444; color: #888; }
+        
+        /* 启动层 */
+        #overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); display:flex; align-items:center; justify-content:center; z-index:100; }
     </style>
 </head>
 <body>
 
-<div id="room-link">等待引擎初始化...</div>
+<div id="overlay">
+    <button id="start-engine-btn" onclick="startPlayroom()">点击进入游戏房间</button>
+</div>
+
+<div id="status-area">等待初始化...</div>
 
 <div id="poker-table">
-    <div style="color: rgba(255,255,255,0.6); font-size: 14px; letter-spacing: 2px;">TOTAL POT</div>
+    <div style="color: rgba(255,255,255,0.4); font-size: 12px;">POT</div>
     <div id="pot-display">$0</div>
 </div>
 
 <div id="players-ring"></div>
 
 <div class="controls">
-    <button id="bet-btn" onclick="window.makeBet(100)">下注 $100</button>
+    <button onclick="window.makeBet(100)">下注 $100</button>
     <button id="deal-btn" onclick="window.startDeal()">开始发牌</button>
 </div>
 
-<script type="module">
-    import { insertCoin, onPlayerJoin, getState, setState, myPlayer, getPlayers, isHost, onStateChange } 
-    from "https://cdn.skypack.dev/playroomkit";
+<script src="https://cdn.jsdelivr.net/npm/playroomkit/dist/playroomkit.js"></script>
 
-    const potEl = document.getElementById("pot-display");
-    const linkEl = document.getElementById("room-link");
+<script>
+    const statusEl = document.getElementById("status-area");
     const dealBtn = document.getElementById("deal-btn");
 
-    async function init() {
-        await insertCoin({ gameId: "cb_poker_v2" });
-        linkEl.innerHTML = `邀请好友: <span style="font-family:monospace;">${window.location.href}</span>`;
+    async function startPlayroom() {
+        document.getElementById("start-engine-btn").innerText = "正在呼叫服务器...";
         
-        // 只有房主能点发牌
-        if (!isHost()) {
+        try {
+            // 初始化 Playroom
+            await Playroom.insertCoin({ gameId: "cb_poker_prod_v3" });
+            
+            // 成功后隐藏遮罩
+            document.getElementById("overlay").style.display = "none";
+            statusEl.innerHTML = `房间已就绪！邀请链接已更新。`;
+
+            setupGame();
+        } catch (e) {
+            alert("启动失败，请检查网络: " + e.message);
+        }
+    }
+
+    function setupGame() {
+        if (!Playroom.isHost()) {
             dealBtn.disabled = true;
             dealBtn.innerText = "等待房主...";
         }
 
-        onPlayerJoin(render);
-        onStateChange("pot", (val) => { potEl.innerText = `$${val || 0}`; });
-        onStateChange("gameRound", render); // 轮次变化时刷新界面
+        Playroom.onPlayerJoin(renderUI);
+        Playroom.onStateChange("pot", (val) => {
+            document.getElementById("pot-display").innerText = `$${val || 0}`;
+        });
+        Playroom.onStateChange("gameRound", renderUI);
+        renderUI();
     }
 
-    // --- 游戏逻辑 ---
-
-    // 1. 发牌逻辑
-    window.startDeal = async () => {
-        if (!isHost()) return;
+    // 发牌逻辑
+    window.startDeal = () => {
+        if (!Playroom.isHost()) return;
         
-        // 生成一副牌并洗牌
         let deck = [];
         const suits = ['♠', '♥', '♣', '♦'];
         const values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
         suits.forEach(s => values.forEach(v => deck.push(v + s)));
         deck.sort(() => Math.random() - 0.5);
 
-        // 给每个玩家发两张私有的牌
-        const players = getPlayers();
+        const players = Playroom.getPlayers();
         players.forEach(p => {
-            const hand = [deck.pop(), deck.pop()];
-            p.setState("hand", hand);
+            p.setState("hand", [deck.pop(), deck.pop()]);
         });
 
-        // 重置底池并增加回合数触发同步
-        const round = getState("gameRound") || 0;
-        setState("gameRound", round + 1, true);
-        setState("pot", 0, true);
+        const round = Playroom.getState("gameRound") || 0;
+        Playroom.setState("gameRound", round + 1, true);
+        Playroom.setState("pot", 0, true);
     };
 
-    // 2. 下注逻辑
     window.makeBet = (amount) => {
-        const currentPot = getState("pot") || 0;
-        setState("pot", currentPot + amount, true);
+        const current = Playroom.getState("pot") || 0;
+        Playroom.setState("pot", current + amount, true);
     };
 
-    // --- UI 渲染 ---
-
-    function render() {
-        const players = getPlayers();
-        const me = myPlayer();
+    function renderUI() {
+        const players = Playroom.getPlayers();
+        const me = Playroom.myPlayer();
         const ring = document.getElementById("players-ring");
         ring.innerHTML = "";
 
@@ -126,10 +128,9 @@
             const hand = p.getState("hand") || [];
             const isMe = p.id === me.id;
 
-            // 计算环绕位置 (数学公式让玩家围成一圈)
             const angle = (i / players.length) * Math.PI * 2 + Math.PI/2;
-            const x = Math.cos(angle) * 180 + (window.innerWidth / 2) - 50;
-            const y = Math.sin(angle) * 140 + (window.innerHeight / 2) - 40;
+            const x = Math.cos(angle) * 160 + (window.innerWidth / 2) - 45;
+            const y = Math.sin(angle) * 120 + (window.innerHeight / 2) - 40;
 
             const div = document.createElement("div");
             div.className = "player-card";
@@ -137,25 +138,21 @@
             div.style.top = `${y}px`;
             div.style.borderColor = prof.color;
 
-            // 如果是自己，显示花色；如果是别人，显示背面
             const cardsHtml = hand.map(card => {
                 if (isMe) {
                     const isRed = card.includes('♥') || card.includes('♦');
                     return `<span class="card-font" style="color:${isRed?'red':'black'}">${card}</span>`;
                 }
-                return `<span class="card-font card-back">??</span>`;
+                return `<span class="card-font" style="background:#555; color:#555; border:1px solid #999">??</span>`;
             }).join("");
 
             div.innerHTML = `
-                <div style="color:${prof.color}; font-size:12px; margin-bottom:5px;">${prof.name} ${isMe?'(你)':''}</div>
-                <div style="display:flex; justify-content:center;">${cardsHtml || '<span style="color:#444; font-size:10px;">等待发牌</span>'}</div>
+                <div style="color:${prof.color}; font-size:10px;">${prof.name}</div>
+                <div style="margin-top:5px; display:flex; justify-content:center;">${cardsHtml || '<span style="color:#666; font-size:10px;">...</span>'}</div>
             `;
             ring.appendChild(div);
         });
     }
-
-    init();
 </script>
-
 </body>
 </html>

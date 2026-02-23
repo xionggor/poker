@@ -31,10 +31,9 @@
         button { padding: 12px 25px; font-size: 1rem; cursor: pointer; border: none; border-radius: 50px; background: var(--gold); color: #000; font-weight: bold; }
         button:disabled { background: #444; color: #888; }
         
-        /* 核心修改：中心启动按钮，替代全屏黑布 */
         #center-start-btn {
             position: absolute;
-            z-index: 50; /* 保证在牌桌上，但在选人框下面 */
+            z-index: 50; 
             padding: 15px 40px;
             font-size: 1.2rem;
             background: #e74c3c;
@@ -55,7 +54,6 @@
 <div id="poker-table">
     <div style="color: rgba(255,255,255,0.4); font-size: 12px; margin-bottom: 5px;">TOTAL POT</div>
     <div id="pot-display">$0</div>
-    
     <button id="center-start-btn" disabled>引擎加载中...</button>
 </div>
 
@@ -85,7 +83,6 @@
         try {
             PK = await Promise.any(promises);
             if (PK && PK.insertCoin) {
-                // 引擎加载成功，按钮变绿并可以点击
                 startBtn.innerText = "点击加入牌局";
                 startBtn.style.background = "#27ae60";
                 startBtn.style.boxShadow = "0 0 20px rgba(39, 174, 96, 0.5)";
@@ -97,17 +94,13 @@
         }
     }
 
-    // 点击中心按钮后触发
     window.startPlayroom = async function() {
         const startBtn = document.getElementById("center-start-btn");
-        startBtn.style.display = "none"; // 点完立刻隐藏按钮自己
+        startBtn.style.display = "none"; 
         
         try {
-            // 呼叫引擎，此时页面上没有任何遮挡物！
             await PK.insertCoin({ gameId: "cb_poker_prod_final", skipLobby: false });
-            
-            // 如果网页刷新了（Playroom机制），代码会重新跑到这里并顺利进入游戏
-            document.getElementById("status-area").innerHTML = `分享此链接邀请好友: <br><span style="color:var(--gold);font-size:12px;">${window.location.href}</span>`;
+            document.getElementById("status-area").innerHTML = `邀请链接: <span style="color:var(--gold);font-size:12px;">${window.location.href}</span>`;
             setupGame();
         } catch (e) {
             alert("启动失败: " + e.message);
@@ -123,14 +116,11 @@
             dealBtn.innerText = "等待房主发牌";
         }
 
-        PK.onPlayerJoin(renderUI);
-        PK.onStateChange("pot", (val) => {
-            document.getElementById("pot-display").innerText = `$${val || 0}`;
-        });
-        PK.onStateChange("gameRound", renderUI);
-        renderUI();
+        // 【核心修复】：删除不存在的 onStateChange，启动“游戏引擎帧循环” (每200毫秒扫描一次状态)
+        setInterval(gameLoop, 200);
     }
 
+    // 洗牌与发牌逻辑
     window.startDeal = () => {
         if (!PK.isHost()) return;
         
@@ -150,16 +140,23 @@
         PK.setState("pot", 0, true); 
     };
 
+    // 下注逻辑
     window.makeBet = (amount) => {
         const current = PK.getState("pot") || 0;
         PK.setState("pot", current + amount, true);
     };
 
-    function renderUI() {
+    // 简易“虚拟DOM”比对锁，绝对防止屏幕闪烁
+    let lastUIState = ""; 
+
+    function gameLoop() {
+        // 1. 同步桌面底池
+        document.getElementById("pot-display").innerText = `$${PK.getState("pot") || 0}`;
+
+        // 2. 同步玩家位置与手牌
         const players = PK.getPlayers();
         const me = PK.myPlayer();
-        const ring = document.getElementById("players-ring");
-        ring.innerHTML = "";
+        let newHTML = "";
 
         players.forEach((p, i) => {
             const prof = p.getProfile();
@@ -170,12 +167,6 @@
             const x = Math.cos(angle) * 160 + (window.innerWidth / 2) - 45;
             const y = Math.sin(angle) * 120 + (window.innerHeight / 2) - 40;
 
-            const div = document.createElement("div");
-            div.className = "player-card";
-            div.style.left = `${x}px`;
-            div.style.top = `${y}px`;
-            div.style.borderColor = prof.color;
-
             const cardsHtml = hand.map(card => {
                 if (isMe) {
                     const isRed = card.includes('♥') || card.includes('♦');
@@ -184,12 +175,20 @@
                 return `<span class="card-font" style="background:#555; color:#555; border:1px solid #999">??</span>`;
             }).join("");
 
-            div.innerHTML = `
-                <div style="color:${prof.color}; font-size:10px;">${prof.name} ${isMe?'(你)':''}</div>
-                <div style="margin-top:5px; display:flex; justify-content:center;">${cardsHtml || '<span style="color:#666; font-size:10px;">等待发牌</span>'}</div>
+            // 拼接最新的玩家状态
+            newHTML += `
+                <div class="player-card" style="left:${x}px; top:${y}px; border-color:${prof.color};">
+                    <div style="color:${prof.color}; font-size:10px;">${prof.name} ${isMe?'(你)':''}</div>
+                    <div style="margin-top:5px; display:flex; justify-content:center;">${cardsHtml || '<span style="color:#666; font-size:10px;">等待发牌</span>'}</div>
+                </div>
             `;
-            ring.appendChild(div);
         });
+
+        // 3. 只有当玩家状态（名字、牌、加入退出）发生变化时，才更新网页，拒绝闪烁！
+        if (newHTML !== lastUIState) {
+            document.getElementById("players-ring").innerHTML = newHTML;
+            lastUIState = newHTML;
+        }
     }
 
     loadEngine();

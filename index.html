@@ -3,123 +3,225 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CB POKER - Pro Table</title>
+    <title>CB POKER - Live Table</title>
     <style>
-        :root { --poker-green: #1a4a32; --gold: #ffd700; --bg: #121212; }
-        body { background: var(--bg); color: white; font-family: sans-serif; margin: 0; display: flex; flex-direction: column; align-items: center; }
-        
-        /* 牌桌样式 */
-        #table { 
-            width: 90vw; height: 50vh; max-width: 700px; 
-            background: radial-gradient(circle, #2d6a4f 0%, #1b4332 100%); 
-            border: 12px solid #3d2b1f; border-radius: 200px; 
-            position: relative; margin-top: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center;
-        }
-        
-        .pot-box { color: var(--gold); font-size: 24px; font-weight: bold; margin-bottom: 10px; }
-        .community-cards { display: flex; gap: 8px; min-height: 80px; }
-        
-        /* 玩家头像框 */
-        .player {
-            position: absolute; background: rgba(0,0,0,0.8); border: 2px solid #555;
-            padding: 10px; border-radius: 12px; width: 100px; text-align: center;
-        }
-        .player.active { border-color: #e74c3c; box-shadow: 0 0 15px #e74c3c; }
+        /* --- 核心颜色与基础设定 --- */
+        :root { --bg-dark: #242b35; --table-outer: #1c232c; --table-inner: #248ceb; --panel-bg: #11151a; --text-main: #ffffff; --text-muted: #8ca0b3; --btn-fold: #d95379; --btn-call: #1976d2; --btn-raise: #0d47a1; --active-green: #2ecc71; --gold: #ffd700; }
+        body { margin: 0; padding: 0; background-color: var(--bg-dark); color: var(--text-main); font-family: 'Segoe UI', sans-serif; height: 100vh; display: flex; justify-content: center; align-items: center; overflow: hidden; position: relative; }
+        .hidden { display: none !important; }
 
-        /* 扑克牌样式 */
-        .card-ui { background: white; color: black; padding: 5px 8px; border-radius: 5px; font-weight: bold; font-size: 14px; margin: 2px; }
-        .card-ui.red { color: red; }
+        /* --- 登录大厅 (遮罩层) --- */
+        #lobby-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-dark); z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .lobby-card { background: var(--panel-bg); padding: 40px; border-radius: 20px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.8); border: 1px solid #333; width: 300px; }
+        .lobby-card input { width: 100%; padding: 15px; margin: 20px 0; border-radius: 8px; border: 1px solid #444; background: #222; color: white; box-sizing: border-box; text-align: center; font-size: 16px;}
+        .lobby-btn { width: 100%; padding: 15px; border-radius: 50px; border: none; font-weight: bold; cursor: pointer; font-size: 16px; background: var(--gold); color: black; transition: 0.2s; }
+        .lobby-btn:hover { transform: scale(1.05); }
 
-        .controls { margin-top: 40px; display: flex; gap: 10px; }
-        button { padding: 12px 24px; border-radius: 50px; border: none; font-weight: bold; cursor: pointer; }
-        .btn-main { background: var(--gold); color: black; }
-        .hidden { display: none; }
+        /* --- 牌桌主视觉 --- */
+        .top-left-logo { position: absolute; top: 20px; left: 20px; font-size: 24px; font-weight: 900; letter-spacing: 2px; }
+        .top-left-logo span { color: var(--text-muted); font-size: 14px; display: block; letter-spacing: 0; font-weight: normal;}
+        
+        .poker-table { width: 80vw; height: 50vh; max-width: 1000px; max-height: 550px; background: radial-gradient(circle, #349feb 0%, var(--table-inner) 100%); border: 20px solid var(--table-outer); border-radius: 250px; box-shadow: 0 20px 50px rgba(0,0,0,0.6), inset 0 0 40px rgba(0,0,0,0.3); position: relative; }
+        .pot-display-container { position: absolute; top: 25%; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 215, 0, 0.3); padding: 8px 25px; border-radius: 30px; text-align: center; z-index: 5; }
+        .pot-label { font-size: 11px; color: #aaa; display: block; margin-bottom: 2px;}
+        .pot-value { font-size: 22px; font-weight: 900; color: var(--gold); }
+        .community-cards-area { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; gap: 8px; align-items: center; z-index: 5; }
+
+        /* --- 扑克牌与玩家 UI --- */
+        .playing-card { background: white; color: black; width: 42px; height: 60px; border-radius: 5px; font-weight: bold; font-size: 18px; display: flex; justify-content: center; align-items: center; box-shadow: -1px 2px 5px rgba(0,0,0,0.4); border: 1px solid #ccc; }
+        .playing-card.red { color: #d32f2f; }
+        .playing-card.back { background: #1976d2; background-image: repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(255,255,255,.1) 5px, rgba(255,255,255,.1) 10px); color: transparent;}
+        
+        .player-seat { position: absolute; width: 90px; display: flex; flex-direction: column; transform: translate(-50%, -50%); transition: all 0.3s ease;}
+        .player-card { background: #000; border-radius: 6px; overflow: hidden; border: 2px solid transparent; box-shadow: 0 4px 10px rgba(0,0,0,0.5); z-index: 10; position: relative; display: flex; flex-direction: column; transition: 0.2s;}
+        .player-card.active { border-color: var(--active-green); box-shadow: 0 0 15px rgba(46, 204, 113, 0.5);}
+        .player-card.active .player-chips { background: var(--active-green); color: #000; }
+        .player-avatar { padding-top: 8px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .player-avatar span { font-size: 24px; line-height: 1; }
+        .player-name { font-size: 11px; color: #ddd; margin-top: 4px; padding-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; text-align: center; }
+        .player-chips { background: #4b5d6d; text-align: center; font-size: 13px; font-weight: bold; padding: 5px 0; transition: 0.2s;}
+        
+        .hole-cards { position: absolute; left: 50%; transform: translateX(-50%); display: flex; z-index: 5; }
+        .card-1 { margin-right: -10px; z-index: 1; }
+        .card-2 { z-index: 2; }
+        .bet-indicator { position: absolute; background: rgba(0,0,0,0.8); padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; display: flex; align-items: center; gap: 4px; border: 1px solid #555; z-index: 12; left: 50%; transform: translateX(-50%); white-space: nowrap; color: var(--gold);}
+
+        /* 排版逻辑 */
+        .pos-bottom .hole-cards { top: -45px; } .pos-bottom .bet-indicator { bottom: calc(100% + 55px); }
+        .pos-top .hole-cards { top: calc(100% - 15px); } .pos-top .bet-indicator { top: calc(100% + 50px); }
+        .bet-right .bet-indicator { top: 50%; left: calc(100% + 15px); bottom: auto; transform: translateY(-50%); }
+        .bet-left .bet-indicator { top: 50%; right: calc(100% + 15px); left: auto; bottom: auto; transform: translateY(-50%); }
+
+        /* 12座位坐标 */
+        .s-btm-3 { top: 102%; left: 50%; } .s-top-2 { top: -2%; left: 40%; } .s-lft-2 { top: 70%; left: -3%; } .s-rgt-1 { top: 30%; left: 103%; }
+        .s-btm-2 { top: 102%; left: 30%; } .s-top-3 { top: -2%; left: 60%; } .s-lft-1 { top: 30%; left: -3%; } .s-rgt-2 { top: 70%; left: 103%; }
+        .s-btm-4 { top: 102%; left: 70%; } .s-top-1 { top: -2%; left: 20%; } .s-btm-1 { top: 102%; left: 10%; } .s-top-4 { top: -2%; left: 80%; }
+
+        /* --- 面板与按钮 --- */
+        .bottom-right-panel { position: absolute; bottom: 20px; right: 20px; display: flex; gap: 15px; align-items: flex-end;}
+        .action-box { display: flex; flex-direction: column; gap: 10px; width: 140px;}
+        .turn-info { text-align: right; margin-bottom: 5px; height: 35px;}
+        .turn-title { color: var(--active-green); font-size: 14px; font-weight: bold; letter-spacing: 1px;}
+        .action-btn { border: none; border-radius: 50px; padding: 15px; font-size: 16px; font-weight: 900; color: white; cursor: pointer; display: flex; flex-direction: column; align-items: center; line-height: 1.2; box-shadow: 0 4px 10px rgba(0,0,0,0.3);}
+        .action-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        .btn-fold { background: var(--btn-fold); } .btn-call { background: var(--btn-call); } .btn-raise { background: var(--btn-raise); }
+        .share-box { position: absolute; bottom: 20px; left: 20px; background: rgba(0,0,0,0.6); padding: 10px 15px; border-radius: 8px; font-size: 12px; color: #aaa;}
     </style>
 </head>
 <body>
 
-    <div id="lobby" style="padding-top: 100px; text-align: center;">
-        <h1 style="color:var(--gold)">CB POKER</h1>
-        <button class="btn-main" onclick="initRoom()">创建/进入房间</button>
+    <div id="lobby-screen">
+        <div class="lobby-card">
+            <h1 style="color:var(--gold); margin-top:0;">CB POKER</h1>
+            <p id="room-tip" style="color:#aaa; font-size:14px;">准备创建新牌局...</p>
+            <input type="text" id="player-name" placeholder="输入你的昵称入座">
+            <button class="lobby-btn" onclick="enterRoom()">进入牌桌</button>
+        </div>
     </div>
 
-    <div id="game-container" class="hidden">
-        <div id="table">
-            <div class="pot-box">POT: $<span id="pot-val">0</span></div>
-            <div class="community-cards" id="board"></div>
-            <div id="players-ring"></div>
+    <div id="game-screen" class="hidden">
+        <div class="top-left-logo">POKERCHILL<span>Custom Built</span></div>
+        
+        <div class="poker-table">
+            <div class="pot-display-container">
+                <span class="pot-label">TOTAL POT</span>
+                <span class="pot-value" id="ui-pot">$0</span>
+            </div>
+            <div class="community-cards-area" id="ui-board"></div>
+            
+            <div id="players-layer"></div>
         </div>
 
-        <div class="controls" id="action-btns">
+        <div class="share-box">
+            邀请好友: <br><span id="share-link" style="color:var(--gold); user-select:all;"></span>
+            <button onclick="send({type:'START_GAME'})" style="margin-top:10px; background:var(--gold); border:none; padding:5px 10px; border-radius:5px; cursor:pointer; font-weight:bold;">房主开始游戏</button>
+        </div>
+
+        <div class="bottom-right-panel">
+            <div class="action-box">
+                <div class="turn-info" id="ui-turn-info"></div>
+                <button class="action-btn btn-fold" id="btn-fold" onclick="send({type:'FOLD'})" disabled>FOLD</button>
+                <button class="action-btn btn-call" id="btn-call" onclick="send({type:'BET', amount:0})" disabled>CHECK / CALL</button>
+                <button class="action-btn btn-raise" id="btn-raise" onclick="send({type:'BET', amount:100})" disabled>RAISE 100</button>
             </div>
+        </div>
     </div>
 
 <script>
+    // 【系统接线区】你的专属服务器地址
     const BACKEND_URL = "https://poker-server.zxc717209554.workers.dev";
-    let ws, myName, roomId = new URLSearchParams(window.location.search).get("room");
+    
+    // 12个座位的智能分配顺序
+    const SEAT_ORDER = ['s-btm-3', 's-top-2', 's-lft-2', 's-rgt-1', 's-btm-2', 's-top-3', 's-lft-1', 's-rgt-2', 's-btm-4', 's-top-1', 's-btm-1', 's-top-4'];
+    const AVATARS = ['😎', '🤖', '🤡', '🤠', '👽', '👻', '🐼', '🧛', '🐻', '🐱', '🐶', '🦊'];
 
-    async function initRoom() {
+    let ws = null;
+    let roomId = new URLSearchParams(window.location.search).get("room");
+    let myName = "";
+
+    // 页面加载逻辑
+    window.onload = () => {
+        if (roomId) document.getElementById("room-tip").innerText = `加入房间: ${roomId.substring(0,6)}...`;
+    };
+
+    // 进入房间逻辑
+    async function enterRoom() {
+        myName = document.getElementById("player-name").value.trim() || "Guest_" + Math.floor(Math.random()*100);
+        
+        // 如果没有房间号，先向服务器请求创建一个
         if (!roomId) {
             const res = await fetch(`${BACKEND_URL}/create-room`, { method: "POST" });
             const data = await res.json();
             roomId = data.roomId;
             window.history.pushState({}, "", `?room=${roomId}`);
         }
-        
-        myName = prompt("请输入你的名字") || "玩家" + Math.floor(Math.random()*1000);
-        connect();
-    }
 
-    function connect() {
-        ws = new WebSocket(BACKEND_URL.replace("https://", "wss://") + `?roomId=${roomId}`);
-        ws.onopen = () => {
-            ws.send(JSON.stringify({ type: "JOIN", name: myName }));
-            document.getElementById("lobby").classList.add("hidden");
-            document.getElementById("game-container").classList.remove("hidden");
-        };
+        // 隐藏大厅，显示牌桌
+        document.getElementById("lobby-screen").classList.add("hidden");
+        document.getElementById("game-screen").classList.remove("hidden");
+        document.getElementById("share-link").innerText = window.location.href;
+
+        // 连接 WebSocket
+        const wsUrl = BACKEND_URL.replace("https://", "wss://") + `?roomId=${roomId}`;
+        ws = new WebSocket(wsUrl);
+        
+        ws.onopen = () => ws.send(JSON.stringify({ type: "JOIN", name: myName }));
         ws.onmessage = (e) => render(JSON.parse(e.data));
     }
 
+    // 发送指令函数
+    function send(obj) { if(ws) ws.send(JSON.stringify(obj)); }
+
+    // --- 核心渲染引擎 (把后端数据变成 UI) ---
     function render(state) {
-        document.getElementById("pot-val").innerText = state.game.pot;
+        // 1. 渲染底池和公共牌
+        document.getElementById("ui-pot").innerText = "$" + state.game.pot;
+        document.getElementById("ui-board").innerHTML = state.game.board.map(c => 
+            `<div class="playing-card ${c.includes('♥')||c.includes('♦')?'red':''}">${c}</div>`
+        ).join("");
+
+        // 2. 渲染所有玩家
+        const layer = document.getElementById("players-layer");
+        layer.innerHTML = "";
         
-        // 渲染玩家
-        const ring = document.getElementById("players-ring");
-        ring.innerHTML = "";
+        let isMyTurn = false;
+
         state.players.forEach((p, i) => {
-            const isActive = i === state.game.turnIndex && state.status !== "WAITING";
-            const angle = (i / state.players.length) * Math.PI * 2 + Math.PI/2;
-            const x = Math.cos(angle) * 180 + (window.innerWidth / 2) - 50;
-            const y = Math.sin(angle) * 120 + 200; // 粗略调整位置
+            // 分配座位和头像
+            const seatClass = SEAT_ORDER[i % 12];
+            const avatar = AVATARS[i % 12];
+            const isActive = (state.game.status !== "WAITING" && i === state.game.turnIndex);
+            
+            if (isActive && p.name === myName) isMyTurn = true;
 
-            const handHtml = p.hand.map(c => {
-                const isRed = c.includes('♥') || c.includes('♦');
-                return `<span class="card-ui ${isRed?'red':''}">${c}</span>`;
-            }).join("");
+            // 智能判断排版类名
+            let posClass = "pos-bottom";
+            if (seatClass.includes("top") || seatClass.includes("lft-1") || seatClass.includes("rgt-1")) posClass = "pos-top";
+            let betClass = "";
+            if (seatClass.includes("lft")) betClass = "bet-right";
+            if (seatClass.includes("rgt")) betClass = "bet-left";
 
-            ring.innerHTML += `
-                <div class="player ${isActive?'active':''}" style="left:${x}px; top:${y}px">
-                    <div style="font-size:12px">${p.name}</div>
-                    <div style="color:var(--gold); font-size:14px">$${p.chips}</div>
-                    <div style="margin-top:5px">${handHtml || '...'}</div>
+            // 底牌 HTML生成
+            let cardsHtml = "";
+            if (p.hand && p.hand.length > 0) {
+                cardsHtml = p.hand.map((c, idx) => {
+                    const isRed = c.includes('♥') || c.includes('♦');
+                    const isHidden = c === "??";
+                    return `<div class="playing-card ${isHidden?'back':''} ${isRed?'red':''} card-${idx+1}">${isHidden?'':c}</div>`;
+                }).join("");
+            }
+
+            // 组装玩家 HTML
+            layer.innerHTML += `
+                <div class="player-seat ${seatClass} ${posClass} ${betClass}">
+                    <div class="hole-cards">${cardsHtml}</div>
+                    <div class="player-card ${isActive ? 'active' : ''}">
+                        <div class="player-avatar"><span>${avatar}</span></div>
+                        <div class="player-name">${p.name}</div>
+                        <div class="player-chips">$${p.chips}</div>
+                    </div>
+                    ${isActive ? `<div class="bet-indicator">🤔 思考中</div>` : ''}
                 </div>
             `;
         });
 
-        // 渲染按钮
-        const btns = document.getElementById("action-btns");
-        if (state.status === "WAITING") {
-            btns.innerHTML = `<button class="btn-main" onclick="send({type:'START_GAME'})">开始这一局</button>`;
+        // 3. 渲染右下角按钮状态
+        const btns = ["btn-fold", "btn-call", "btn-raise"];
+        const turnInfo = document.getElementById("ui-turn-info");
+        
+        if (state.game.status === "WAITING") {
+            turnInfo.innerHTML = `<span style="color:#aaa;">等待开始...</span>`;
+            btns.forEach(id => document.getElementById(id).disabled = true);
         } else {
-            const isMyTurn = state.players[state.game.turnIndex].name === myName;
-            btns.innerHTML = isMyTurn ? `
-                <button style="background:#555;color:white" onclick="send({type:'BET', amount:0})">过牌 Check</button>
-                <button class="btn-main" onclick="send({type:'BET', amount:100})">加注 $100</button>
-            ` : `<div style="color:#888">等待对手行动...</div>`;
+            if (isMyTurn) {
+                turnInfo.innerHTML = `<div class="turn-title">YOUR TURN</div>`;
+                btns.forEach(id => document.getElementById(id).disabled = false);
+            } else {
+                turnInfo.innerHTML = `<span style="color:#aaa;">等待对手...</span>`;
+                btns.forEach(id => document.getElementById(id).disabled = true);
+            }
         }
     }
-
-    function send(obj) { ws.send(JSON.stringify(obj)); }
 </script>
 </body>
 </html>

@@ -89,7 +89,7 @@
         .action-box { display: flex; flex-direction: column; gap: 10px; width: 140px;}
         .turn-info { text-align: right; margin-bottom: 5px; height: 35px;}
         .turn-title { color: var(--active-green); font-size: 14px; font-weight: bold; letter-spacing: 1px;}
-        .action-btn { border: none; border-radius: 50px; padding: 15px; font-size: 16px; font-weight: 900; color: white; cursor: pointer; display: flex; flex-direction: column; align-items: center; line-height: 1.2; box-shadow: 0 4px 10px rgba(0,0,0,0.3);}
+        .action-btn { border: none; border-radius: 50px; padding: 15px; font-size: 16px; font-weight: 900; color: white; cursor: pointer; display: flex; flex-direction: column; align-items: center; line-height: 1.2; box-shadow: 0 4px 10px rgba(0,0,0,0.3); transition: 0.2s;}
         .action-btn:disabled { opacity: 0.3; cursor: not-allowed; }
         .btn-fold { background: var(--btn-fold); } .btn-call { background: var(--btn-call); } .btn-raise { background: var(--btn-raise); }
         
@@ -167,9 +167,9 @@
         <div class="bottom-right-panel" id="action-panel">
             <div class="action-box">
                 <div class="turn-info" id="ui-turn-info"></div>
-                <button class="action-btn btn-fold" id="btn-fold" onclick="send({type:'FOLD'})" disabled>FOLD</button>
-                <button class="action-btn btn-call" id="btn-call" onclick="send({type:'BET', amount:0})" disabled>CHECK / CALL</button>
-                <button class="action-btn btn-raise" id="btn-raise" onclick="send({type:'BET', amount:100})" disabled>RAISE 100</button>
+                <button class="action-btn btn-fold" id="btn-fold" onclick="send({type:'ACTION', name: myName, action:'FOLD'})" disabled>FOLD</button>
+                <button class="action-btn btn-call" id="btn-call" onclick="send({type:'ACTION', name: myName, action:'CALL'})" disabled>CHECK / CALL</button>
+                <button class="action-btn btn-raise" id="btn-raise" onclick="promptRaise()" disabled>RAISE 100</button>
             </div>
         </div>
     </div>
@@ -185,7 +185,8 @@
     let myName = ""; 
     let currentRoomId = null;
     let selectedAvatar = '😎';
-    let isWaitingForServer = false; // 新增：等待服务器发牌的防卡死锁
+    let isWaitingForServer = false;
+    let latestGameState = null; // 缓存最新状态供加注计算使用
 
     window.onload = () => {
         const roomCode = new URLSearchParams(window.location.search).get('room');
@@ -223,31 +224,27 @@
         renderAvatarGrid();
     }
 
-    // --- 【终极修复】带有防丢包、超时反馈的入座逻辑 ---
+    // --- 带有防丢包、超时反馈的入座逻辑 ---
     function confirmSit() {
         const nameInput = document.getElementById('sit-name').value.trim();
         if(!nameInput) return alert("请输入昵称！(注意：不要和别人重名)");
         
         myName = selectedAvatar + "|" + nameInput; 
-        isWaitingForServer = true; // 开启同步锁
+        isWaitingForServer = true; 
         
-        // 视觉反馈：变为加载中
         const btn = document.getElementById('btn-confirm-sit');
         btn.innerText = "正在同步云端...";
         btn.disabled = true;
 
-        // 向服务器发射请求
         if (ws && ws.readyState === 1) {
             ws.send(JSON.stringify({ type: "JOIN", name: myName }));
         } else {
-            // 如果碰巧网断了，强行重连一次
             connectWebSocket();
             setTimeout(() => {
                 if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "JOIN", name: myName }));
             }, 1000);
         }
 
-        // 超时保险：如果 5 秒后还没收到服务器渲染，强行报错解锁
         setTimeout(() => {
             if (isWaitingForServer) {
                 alert("云端无响应。可能是因为您输入了重复的名字，或网络波动。请换个名字重试！");
@@ -281,7 +278,6 @@
             navTo('view-game');
             document.getElementById('host-panel').classList.remove('hidden');
             
-            // 房主直接弹出选人框
             openSitModal(); 
             renderEngine({ status: "WAITING", game: { pot: 0, status: "WAITING", board: [] }, players: [] });
         } catch (e) {
@@ -301,18 +297,17 @@
         navTo('view-game');
         document.getElementById('host-panel').classList.add('hidden'); 
         
-        // 旁观者渲染空桌
         renderEngine({ status: "WAITING", game: { pot: 0, status: "WAITING", board: [] }, players: [] });
     }
 
     function connectWebSocket() {
         const wsUrl = BACKEND_URL.replace("https://", "wss://") + `?roomId=${currentRoomId}`;
         ws = new WebSocket(wsUrl);
-        // 主动激活服务器
         ws.onopen = () => ws.send(JSON.stringify({ type: "PING" }));
         ws.onmessage = (e) => {
             try {
-                renderEngine(JSON.parse(e.data));
+                latestGameState = JSON.parse(e.data); // 缓存最新状态
+                renderEngine(latestGameState);
             } catch (err) {
                 console.error("数据解析失败", err);
             }
@@ -321,7 +316,17 @@
 
     function send(obj) { if(ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
 
-    // 【算法强化】基于房间 ID 生成一个稳定的随机排位地图
+    // 加注弹窗
+    function promptRaise() {
+        if (!latestGameState || !latestGameState.game) return;
+        const minRaise = (latestGameState.game.currentBet || 0) + (latestGameState.game.bigBlind || 100);
+        const raiseAmt = prompt(`请输入加注的总额度 (Raise To) \n最低加注至: ${minRaise}`, minRaise);
+        if (raiseAmt && !isNaN(raiseAmt)) {
+            send({type:'ACTION', name: myName, action:'RAISE', amount: parseInt(raiseAmt)});
+        }
+    }
+
+    // 基于房间 ID 生成稳定的随机地图
     function getSeatMap(roomId) {
         let seed = 0;
         if (roomId) {
@@ -343,6 +348,13 @@
 
         document.getElementById("ui-pot").innerText = "$" + state.game.pot;
         
+        // 渲染公共牌
+        const boardLayer = document.getElementById("ui-board");
+        boardLayer.innerHTML = (state.game.board || []).map(c => {
+            const isRed = c.includes('♥') || c.includes('♦');
+            return `<div class="playing-card ${isRed ? 'red' : ''}">${c}</div>`;
+        }).join("");
+
         // 游戏一旦开始，隐藏分享链接和开始按钮
         const pill = document.getElementById("invite-pill-container");
         if(state.game.status !== "WAITING") {
@@ -352,20 +364,18 @@
             pill.classList.remove("hidden");
         }
 
-        // 判断当前浏览器里的人，是否已经被服务器承认入座
         let playersArray = state.players || [];
         let amISeated = playersArray.some(p => p && p.name === myName && myName !== "");
         
-        // 【关键解绑】：收到服务器承认后，关闭模态框
+        // 解除锁
         if (isWaitingForServer && amISeated) {
-            isWaitingForServer = false; // 解除锁
+            isWaitingForServer = false; 
             document.getElementById('sit-modal').classList.add('hidden');
             const btn = document.getElementById('btn-confirm-sit');
             btn.innerText = "确定入座";
             btn.disabled = false;
         }
 
-        // 大按钮显示逻辑
         if (amISeated) {
             document.getElementById('btn-take-seat').classList.add('hidden'); 
         } else if (myName === "" || !isWaitingForServer) {
@@ -377,14 +387,12 @@
         
         let isMyTurn = false;
         
-        // 将服务器的玩家名单，通过防撞车算法分配到 10 个视觉座位上
         const visualMap = getSeatMap(currentRoomId);
         let displaySeats = new Array(MAX_SEATS).fill(null);
         
         playersArray.forEach((p, index) => {
             if (!p) return;
             let visualSeatIndex = visualMap[index % 10]; 
-            // 如果发生了极小概率的冲突，往后顺延一个空位
             while (displaySeats[visualSeatIndex] !== null) {
                 visualSeatIndex = (visualSeatIndex + 1) % 10;
             }
@@ -406,7 +414,6 @@
                 const isActive = (state.game.status !== "WAITING" && p.realIndex === state.game.turnIndex);
                 if (isActive && p.name === myName) isMyTurn = true;
 
-                // 拆解出头像和名字
                 let displayAvatar = '😎';
                 let displayName = p.name;
                 if (p.name.includes('|')) {
@@ -426,13 +433,15 @@
 
                 layer.innerHTML += `
                     <div class="player-seat ${seatClass} ${posClass} ${betClass}">
-                        <div class="hole-cards">${cardsHtml}</div>
-                        <div class="player-card ${isActive ? 'active' : ''}">
+                        <div class="hole-cards">${p.folded ? '' : cardsHtml}</div>
+                        <div class="player-card ${isActive && !p.folded ? 'active' : ''}" style="${p.folded ? 'opacity: 0.5;' : ''}">
                             <div class="player-avatar"><span>${displayAvatar}</span></div>
                             <div class="player-name">${displayName}</div>
                             <div class="player-chips">$${p.chips}</div>
                         </div>
-                        ${isActive ? `<div class="bet-indicator">思考中...</div>` : ''}
+                        ${(p.betThisRound > 0 && state.game.status !== "WAITING") ? `<div class="bet-indicator">⚪ $${p.betThisRound}</div>` : ''}
+                        ${isActive && !p.folded ? `<div class="bet-indicator" style="background:var(--active-green); color:black;">思考中...</div>` : ''}
+                        ${p.folded ? `<div class="bet-indicator" style="background:var(--btn-fold); color:white;">已弃牌</div>` : ''}
                     </div>
                 `;
             } else {
@@ -444,20 +453,37 @@
             }
         }
 
-        // --- 动作台状态 ---
+        // --- 动作台状态更新 (智能 Check / Call 按钮) ---
         const btns = ["btn-fold", "btn-call", "btn-raise"];
         const turnInfo = document.getElementById("ui-turn-info");
+        const btnCall = document.getElementById("btn-call");
+        const btnRaise = document.getElementById("btn-raise");
         
         if (state.game.status === "WAITING" || !amISeated) {
             turnInfo.innerHTML = `<span style="color:#aaa;">${amISeated ? '等待发牌' : '旁观中...'}</span>`;
             btns.forEach(id => document.getElementById(id).disabled = true);
+            btnCall.innerText = "CHECK / CALL";
+            btnCall.style.background = "var(--btn-call)";
         } else {
             if (isMyTurn) {
                 turnInfo.innerHTML = `<div class="turn-title">YOUR TURN</div>`;
                 btns.forEach(id => document.getElementById(id).disabled = false);
+
+                const myPlayerData = playersArray.find(p => p && p.name === myName);
+                if (myPlayerData) {
+                    const callAmount = state.game.currentBet - myPlayerData.betThisRound;
+                    if (callAmount <= 0) {
+                        btnCall.innerText = "CHECK (过牌)";
+                        btnCall.style.background = "var(--active-green)"; 
+                    } else {
+                        btnCall.innerText = `CALL $${callAmount} (跟注)`;
+                        btnCall.style.background = "var(--btn-call)"; 
+                    }
+                }
             } else {
                 turnInfo.innerHTML = `<span style="color:#aaa;">等待对手...</span>`;
                 btns.forEach(id => document.getElementById(id).disabled = true);
+                btnCall.style.background = "var(--btn-call)"; 
             }
         }
     }

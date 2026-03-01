@@ -44,7 +44,6 @@
         .invite-pill { background: rgba(17, 21, 26, 0.95); padding: 20px 40px; border-radius: 50px; text-align: center; border: 1px solid #333; cursor: pointer; box-shadow: 0 10px 20px rgba(0,0,0,0.5); transition: 0.2s; }
         .invite-pill:hover { background: #1a2028; transform: scale(1.02); }
 
-        /* 【新增：战绩表按钮与浮窗】 */
         .btn-ledger { position: absolute; top: 20px; right: 20px; background: rgba(17, 21, 26, 0.8); border: 1px solid var(--gold); color: var(--gold); padding: 10px 20px; border-radius: 20px; font-weight: bold; cursor: pointer; z-index: 90; transition: 0.2s; }
         .btn-ledger:hover { background: rgba(255, 215, 0, 0.2); }
         .ledger-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 300; }
@@ -152,8 +151,6 @@
         .btn-call { background: linear-gradient(145deg, #1976d2, #115293); }
         .btn-raise { background: linear-gradient(145deg, #ffd700, #d4b400); }
         .btn-raise .btn-title, .btn-raise .btn-sub { color: #11151a; }
-        
-        .waiting-tip { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 10px 20px; border-radius: 30px; color: #aaa; font-size: 14px; font-weight: bold; border: 1px solid #333; z-index: 20;}
     </style>
 </head>
 <body>
@@ -192,7 +189,6 @@
 
     <div id="view-game" class="view-screen hidden">
         <div class="top-left-logo" style="color:var(--gold)">POKERCHILL</div>
-        
         <button class="btn-ledger hidden" id="btn-ledger" onclick="openLedger()">📊 战绩计分板</button>
 
         <div id="table-container">
@@ -256,20 +252,10 @@
                 <span style="font-size:24px; cursor:pointer; color:#8ca0b3;" onclick="closeLedger()">&times;</span>
             </div>
             <table class="ledger-table">
-                <thead>
-                    <tr>
-                        <th style="text-align:left;">玩家</th>
-                        <th>总买入</th>
-                        <th>当前筹码</th>
-                        <th style="text-align:right;">净盈亏</th>
-                    </tr>
-                </thead>
-                <tbody id="ledger-tbody">
-                    </tbody>
+                <thead><tr><th style="text-align:left;">玩家</th><th>总买入</th><th>当前筹码</th><th style="text-align:right;">净盈亏</th></tr></thead>
+                <tbody id="ledger-tbody"></tbody>
             </table>
-            <div style="text-align:center; margin-top:25px;">
-                <button class="btn-main btn-dark" style="margin:0; width:150px; padding:10px;" onclick="closeLedger()">关闭</button>
-            </div>
+            <div style="text-align:center; margin-top:25px;"><button class="btn-main btn-dark" style="margin:0; width:150px; padding:10px;" onclick="closeLedger()">关闭</button></div>
         </div>
     </div>
 
@@ -291,7 +277,6 @@
     let prevBoardLength = 0;
     let prevBurnLength = 0;
 
-    // 账单开闭逻辑
     function openLedger() { document.getElementById('ledger-modal').classList.remove('hidden'); }
     function closeLedger() { document.getElementById('ledger-modal').classList.add('hidden'); }
 
@@ -439,10 +424,10 @@
 
         let playersArray = state.players || [];
         
-        // 【核心修改：战绩计分板动态注入】
         if (playersArray.length > 0) document.getElementById('btn-ledger').classList.remove('hidden');
         let ledgerBody = "";
         playersArray.forEach(p => {
+            if(p.isKicked) return; // 剔除被踢的人
             const net = p.chips - (p.totalBuyIn || 0);
             const netClass = net > 0 ? 'text-green' : (net < 0 ? 'text-red' : '');
             const netStr = net > 0 ? `+$${net}` : (net < 0 ? `-$${Math.abs(net)}` : `$0`);
@@ -452,17 +437,15 @@
         document.getElementById("ledger-tbody").innerHTML = ledgerBody;
 
 
-        // 【核心修改：破产阻断机制】
         const banner = document.getElementById("winner-banner");
         if (state.game.status === "SHOWDOWN") {
-            const hasBankrupt = playersArray.some(p => p.chips === 0 || p.isOut);
+            const hasBankrupt = playersArray.some(p => !p.isKicked && (p.chips === 0 || p.isOut));
             
             let richMsg = state.game.winMessage;
             richMsg = richMsg.replace(/(10|[2-9JQKA])[♥♦]/g, '<span class="msg-red-card">$&</span>');
             richMsg = richMsg.replace(/(10|[2-9JQKA])[♠♣]/g, '<span class="msg-black-card">$&</span>');
 
             if (hasBankrupt) {
-                // 有人破产，强制暂停倒计时！
                 if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
                 banner.innerHTML = `
                     <div style="margin-bottom: 15px; font-size: 18px;">${richMsg}</div>
@@ -472,7 +455,6 @@
                     </div>
                 `;
             } else {
-                // 全员健康，开启 10 秒倒计时
                 if (!countdownInterval) {
                     let timeLeft = 10;
                     countdownInterval = setInterval(() => {
@@ -505,15 +487,17 @@
         if(state.game.status !== "WAITING") pill.classList.add("hidden"); else pill.classList.remove("hidden");
 
         const pureMyName = myName.split('|')[1] || myName;
-        let amISeated = playersArray.some(p => p && (p.name.split('|')[1] || p.name) === pureMyName);
         
-        if (wasISeated && !amISeated && myName !== "" && !isWaitingForServer) {
+        // 【核心修复：检查 isKicked 标志来进行强制遣返】
+        const myDataRecord = playersArray.find(p => p && (p.name.split('|')[1] || p.name) === pureMyName);
+        if (myDataRecord && myDataRecord.isKicked) {
             alert("您已被房主移出房间。");
             myName = ""; localStorage.removeItem('poker_session_' + currentRoomId);
             window.location.href = window.location.pathname; 
             return;
         }
-        wasISeated = amISeated;
+
+        let amISeated = !!myDataRecord;
 
         if (isWaitingForServer && amISeated) { isWaitingForServer = false; document.getElementById('sit-modal').classList.add('hidden'); document.getElementById('btn-confirm-sit').innerText = "确定入座"; document.getElementById('btn-confirm-sit').disabled = false; }
         if (amISeated) document.getElementById('btn-take-seat').classList.add('hidden'); else if (myName === "" || !isWaitingForServer) document.getElementById('btn-take-seat').classList.remove('hidden'); 
@@ -524,7 +508,7 @@
         let displaySeats = new Array(MAX_SEATS).fill(null);
         
         playersArray.forEach((p, index) => {
-            if (!p) return;
+            if (!p || p.isKicked) return; // 绝不渲染被踢出的人，留出空位！
             let visualSeatIndex = visualMap[index % 10]; 
             while (displaySeats[visualSeatIndex] !== null) visualSeatIndex = (visualSeatIndex + 1) % 10;
             displaySeats[visualSeatIndex] = { ...p, realIndex: index };

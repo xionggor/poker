@@ -47,12 +47,17 @@
         .btn-ledger { position: absolute; top: 20px; right: 20px; background: rgba(17, 21, 26, 0.8); border: 1px solid var(--gold); color: var(--gold); padding: 10px 20px; border-radius: 20px; font-weight: bold; cursor: pointer; z-index: 90; transition: 0.2s; }
         .btn-ledger:hover { background: rgba(255, 215, 0, 0.2); }
         .ledger-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 300; }
-        .ledger-box { background: #1a1e24; border: 2px solid var(--gold); border-radius: 15px; padding: 25px; width: 90%; max-width: 500px; box-shadow: 0 10px 40px rgba(0,0,0,0.9); }
+        .ledger-box { background: #1a1e24; border: 2px solid var(--gold); border-radius: 15px; padding: 25px; width: 90%; max-width: 500px; box-shadow: 0 10px 40px rgba(0,0,0,0.9); max-height: 80vh; overflow-y: auto;}
         .ledger-table { width: 100%; border-collapse: collapse; margin-top: 15px; color: white; }
         .ledger-table th, .ledger-table td { padding: 12px; border-bottom: 1px solid #333; text-align: center; }
         .ledger-table th { color: #8ca0b3; font-size: 13px; letter-spacing: 1px; }
         .text-green { color: #2ecc71; font-weight: bold; }
         .text-red { color: #e74c3c; font-weight: bold; }
+
+        /* 结账方案块 */
+        .settlement-area { margin-top: 20px; padding: 15px; background: #242b35; border-radius: 10px; border: 1px dashed #444; display: none;}
+        .settlement-title { font-size: 14px; color: var(--gold); margin-bottom: 10px; font-weight: bold; text-align: center;}
+        .settlement-line { font-size: 15px; margin-bottom: 8px; text-align: center; padding: 5px; background: rgba(0,0,0,0.4); border-radius: 5px;}
 
         .winner-banner { position: absolute; top: 15%; left: 50%; transform: translateX(-50%); background: rgba(17, 21, 26, 0.95); border: 1px solid var(--gold); color: #eee; padding: 15px 25px; border-radius: 16px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.8); z-index: 200; white-space: nowrap; animation: popDown 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         @keyframes popDown { 0% { top: 5%; opacity: 0; transform: translate(-50%, -20px) scale(0.9);} 100% { top: 15%; opacity: 1; transform: translate(-50%, 0) scale(1);} }
@@ -257,7 +262,16 @@
                 <thead><tr><th style="text-align:left;">玩家</th><th>总买入</th><th>当前筹码</th><th style="text-align:right;">净盈亏</th></tr></thead>
                 <tbody id="ledger-tbody"></tbody>
             </table>
-            <div style="text-align:center; margin-top:25px;"><button class="btn-main btn-dark" style="margin:0; width:150px; padding:10px;" onclick="closeLedger()">关闭</button></div>
+            
+            <div id="settlement-area" class="settlement-area">
+                <div class="settlement-title">💰 最终结账转账方案</div>
+                <div id="settlement-list"></div>
+            </div>
+
+            <div style="text-align:center; margin-top:20px; display:flex; gap:10px; justify-content:center;">
+                <button class="btn-main btn-gold" style="margin:0; width:150px; padding:10px;" onclick="generateSettlement()">生成转账方案</button>
+                <button class="btn-main btn-dark" style="margin:0; width:150px; padding:10px;" onclick="closeLedger()">关闭</button>
+            </div>
         </div>
     </div>
 
@@ -279,8 +293,44 @@
     let prevBoardLength = 0;
     let prevBurnLength = 0;
 
-    function openLedger() { document.getElementById('ledger-modal').classList.remove('hidden'); }
+    function openLedger() { document.getElementById('ledger-modal').classList.remove('hidden'); document.getElementById('settlement-area').style.display = 'none'; }
     function closeLedger() { document.getElementById('ledger-modal').classList.add('hidden'); }
+
+    // 【核心新增：生成极简结账方案的算法】
+    function generateSettlement() {
+        if(!latestGameState || !latestGameState.players) return;
+        let winners = []; let losers = [];
+        
+        latestGameState.players.forEach(p => {
+            if (p.isKicked) return;
+            let net = p.chips - (p.totalBuyIn || 0);
+            let pName = p.name.split('|')[1] || p.name;
+            if (net > 0) winners.push({name: pName, amount: net});
+            else if (net < 0) losers.push({name: pName, amount: -net}); 
+        });
+
+        winners.sort((a, b) => b.amount - a.amount);
+        losers.sort((a, b) => b.amount - a.amount);
+
+        let html = "";
+        let i = 0, j = 0;
+        
+        // 贪心对冲匹配算法
+        while(i < winners.length && j < losers.length) {
+            let w = winners[i]; let l = losers[j];
+            let settleAmt = Math.min(w.amount, l.amount);
+            
+            html += `<div class="settlement-line"><span class="text-red">${l.name}</span> 应支付给 <span class="text-green">${w.name}</span> : <strong style="color:white;">$${settleAmt}</strong></div>`;
+            
+            w.amount -= settleAmt; l.amount -= settleAmt;
+            if (w.amount === 0) i++;
+            if (l.amount === 0) j++;
+        }
+        
+        if (html === "") html = `<div class="settlement-line" style="color:#aaa;">全员盈亏平衡，无需转账。</div>`;
+        document.getElementById('settlement-list').innerHTML = html;
+        document.getElementById('settlement-area').style.display = 'block';
+    }
 
     const slider = document.getElementById('raise-slider');
     const displayAmount = document.getElementById('display-amount');
@@ -381,10 +431,7 @@
         ws = new WebSocket(wsUrl); 
         ws.onopen = () => {
             ws.send(JSON.stringify({ type: "PING" }));
-            // 【核心修复 1：只要网线一连通，立马向服务器大喊“我回来了！”】
-            if (myName !== "") {
-                ws.send(JSON.stringify({ type: "JOIN", name: myName }));
-            }
+            if (myName !== "") ws.send(JSON.stringify({ type: "JOIN", name: myName }));
         };
         ws.onmessage = (e) => { try { latestGameState = JSON.parse(e.data); renderEngine(latestGameState); } catch (err) {} };
     }
@@ -445,7 +492,6 @@
         });
         document.getElementById("ledger-tbody").innerHTML = ledgerBody;
 
-
         const banner = document.getElementById("winner-banner");
         if (state.game.status === "SHOWDOWN") {
             const hasBankrupt = playersArray.some(p => !p.isKicked && (p.chips === 0 || p.isOut));
@@ -496,7 +542,6 @@
         if(state.game.status !== "WAITING") pill.classList.add("hidden"); else pill.classList.remove("hidden");
 
         const pureMyName = myName.split('|')[1] || myName;
-        
         const myDataRecord = playersArray.find(p => p && (p.name.split('|')[1] || p.name) === pureMyName);
         if (myDataRecord && myDataRecord.isKicked) {
             alert("您已被房主移出房间。");
@@ -506,7 +551,6 @@
         }
 
         let amISeated = !!myDataRecord;
-
         if (isWaitingForServer && amISeated) { isWaitingForServer = false; document.getElementById('sit-modal').classList.add('hidden'); document.getElementById('btn-confirm-sit').innerText = "确定入座"; document.getElementById('btn-confirm-sit').disabled = false; }
         if (amISeated) document.getElementById('btn-take-seat').classList.add('hidden'); else if (myName === "" || !isWaitingForServer) document.getElementById('btn-take-seat').classList.remove('hidden'); 
 
@@ -562,7 +606,6 @@
                 else if (p.chips === 0 && !isOut && !p.folded && state.game.status !== "WAITING") badgeHtml = `<div class="status-badge-inner bg-allin">ALL-IN</div>`;
                 else if (isActive && !p.folded && !isOut) badgeHtml = `<div class="status-badge-inner bg-think">思考中...</div>`;
 
-                // 【核心修复 2：把 name: myName 令牌交给服务器，证明我是房主！】
                 let kickHtml = '';
                 if (isHost && p.name !== myName) { kickHtml = `<button class="kick-btn" onclick="send({type:'KICK', name: myName, targetName:'${p.name}'})">踢出玩家</button>`; }
 

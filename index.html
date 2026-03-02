@@ -137,7 +137,7 @@
         #btn-take-seat { position:absolute; bottom:120px; left:50%; transform:translateX(-50%); padding: 15px 40px; border-radius: 50px; background:var(--gold); color:black; font-weight:bold; font-size:18px; border:none; cursor:pointer; z-index:30; box-shadow: 0 5px 15px rgba(0,0,0,0.5); transition: 0.2s;}
         #btn-take-seat:hover { transform: translateX(-50%) scale(1.05); }
 
-        /* 游戏动作控制台 */
+        /* 游戏行动控制台 */
         .action-console { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(17, 21, 26, 0.95); border: 1px solid #333; border-radius: 16px; padding: 20px; width: 480px; box-shadow: 0 20px 50px rgba(0,0,0,0.8); display: flex; flex-direction: column; gap: 15px; z-index: 100; }
         .turn-badge { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); background: #2ecc71; color: black; font-weight: 900; font-size: 13px; padding: 4px 15px; border-radius: 20px; letter-spacing: 1px; box-shadow: 0 4px 10px rgba(46, 204, 113, 0.4); }
         .raise-control-area { display: flex; flex-direction: column; gap: 12px; background: #1a2028; padding: 15px; border-radius: 12px; border: 1px solid #2a3441; }
@@ -181,7 +181,7 @@
         <div class="menu-card" style="width: 380px;">
             <div class="settings-header"><span onclick="navTo('view-home')">⟵ Back</span><span style="color:var(--gold);" onclick="createRoomFlow()">Continue ⟶</span></div>
             <h2 style="margin-top:0; color:white; letter-spacing: 1px;">CASH GAME</h2>
-            <div class="setting-item"><span class="setting-label">默认买入额 (Buy-in)</span><input type="number" id="set-buyin" class="setting-input" value="10000"></div>
+            <div class="setting-item"><span class="setting-label">标准买入额 (Buy-in)</span><input type="number" id="set-buyin" class="setting-input" value="10000"></div>
             <div class="setting-item"><span class="setting-label">小盲注 (Small Blind)</span><input type="number" id="set-sb" class="setting-input" value="50" step="any"></div>
         </div>
     </div>
@@ -225,7 +225,7 @@
 
         <div class="host-panel hidden" id="host-panel">
             <div style="margin-bottom: 5px; opacity: 0.8; font-weight:bold; color:var(--gold);">👑 房主控制台</div>
-            <div style="margin-bottom: 10px; opacity: 0.6;">标准买入 $<span id="info-buyin">0</span> | 盲注 <span id="info-blinds">0/0</span></div>
+            <div style="margin-bottom: 10px; opacity: 0.6;">标准底金 $<span id="info-buyin">0</span> | 盲注 <span id="info-blinds">0/0</span></div>
             <button onclick="triggerStartGame()" id="btn-start" class="host-btn btn-green">▶ 开始新一局</button>
             <button onclick="forceRestart()" id="btn-force-restart" class="host-btn btn-red">🛑 强制重开局</button>
         </div>
@@ -257,7 +257,7 @@
         <div id="buyin-console" class="action-console hidden" style="z-index: 105; bottom: 30px;">
             <div class="turn-badge" style="background: var(--gold); color: black;">💳 补充筹码</div>
             <div style="text-align: center; color: white; margin: 15px 0 25px 0; font-size: 16px;">
-                是否确认自主购买 1 组标准筹码？<br>
+                是否确认按当前标准底金进行补充？<br>
                 <strong style="color: var(--active-green); font-size: 32px; line-height: 2;">+$<span id="ui-buyin-amount">10000</span></strong>
             </div>
             <div class="main-action-row" style="height: 55px;">
@@ -304,10 +304,9 @@
     let isWaitingForServer = false;
     let latestGameState = null;
     let countdownInterval = null; 
-    let wasISeated = false; 
-
-    let prevBoardLength = 0;
-    let prevBurnLength = 0;
+    
+    // 【核心新增：用来向服务器传递初始设定的全局基因包】
+    let creatorSettings = null; 
 
     function openLedger() { document.getElementById('ledger-modal').classList.remove('hidden'); document.getElementById('settlement-area').style.display = 'none'; }
     function closeLedger() { document.getElementById('ledger-modal').classList.add('hidden'); }
@@ -395,8 +394,15 @@
         myName = selectedAvatar + "|" + nameInput; isWaitingForServer = true; 
         localStorage.setItem('poker_session_' + currentRoomId, JSON.stringify({ name: myName, avatar: selectedAvatar }));
         const btn = document.getElementById('btn-confirm-sit'); btn.innerText = "正在入座..."; btn.disabled = true;
-        if (ws && ws.readyState === 1) { ws.send(JSON.stringify({ type: "JOIN", name: myName })); } 
-        else { connectWebSocket(); setTimeout(() => { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "JOIN", name: myName })); }, 1000); }
+        
+        // 【核心修复：在发送报到指令时，夹带房间设定基因】
+        if (ws && ws.readyState === 1) { 
+            let joinMsg = { type: "JOIN", name: myName };
+            if (creatorSettings) { joinMsg.settings = creatorSettings; creatorSettings = null; }
+            ws.send(JSON.stringify(joinMsg)); 
+        } 
+        else { connectWebSocket(); } // connectWebSocket里的 onopen 也会负责夹带发送
+        
         setTimeout(() => { if (isWaitingForServer) { alert("云端无响应。请换个名字重试！"); btn.innerText = "确定入座"; btn.disabled = false; isWaitingForServer = false; } }, 5000);
     }
 
@@ -406,26 +412,28 @@
             const data = await res.json(); currentRoomId = data.roomId; 
             window.history.pushState({}, "", `?room=${currentRoomId}`);
             document.getElementById('display-room-url').innerText = `ROOM CODE: ${currentRoomId}`;
+            
+            // 【核心修复：只在创建房间时抓取一次设定，打包成基因包备用】
             const buyInVal = parseFloat(document.getElementById('set-buyin').value) || 10000;
             const sb = parseFloat(document.getElementById('set-sb').value) || 50;
-            document.getElementById('info-buyin').innerText = buyInVal; document.getElementById('info-blinds').innerText = `${sb}/${sb * 2}`;
-            connectWebSocket(); navTo('view-game'); document.getElementById('host-panel').classList.remove('hidden');
+            creatorSettings = { initialChips: buyInVal, smallBlind: sb, bigBlind: sb * 2 };
+            
+            navTo('view-game'); document.getElementById('host-panel').classList.remove('hidden');
             openSitModal(); renderEngine({ status: "WAITING", game: { pot: 0, status: "WAITING", board: [] }, players: [] });
         } catch (e) { alert("无法连接 Cloudflare 服务器。"); }
     }
 
     function triggerStartGame() {
-        const buyInVal = parseFloat(document.getElementById('info-buyin').innerText) || 10000;
-        const sb = parseFloat(document.getElementById('info-blinds').innerText.split('/')[0]) || 50;
-        send({ type: 'START_GAME', settings: { initialChips: buyInVal, smallBlind: sb, bigBlind: sb * 2 } });
+        // 去除之前强制向所有人发钱的逻辑，全员走自主入座买入
+        send({ type: 'START_GAME', name: myName });
     }
 
     function forceRestart() { if(confirm("确定要强制结束当前对局吗？桌面的所有牌和底池将会被清空！")) send({ type: 'FORCE_RESTART', name: myName }); }
     
-    // 【核心更新：呼出专业统一的买入控制台】
+    // 【完美重构的买入控制台调出逻辑】
     function openBuyInConsole() {
         if (!latestGameState || !latestGameState.game) return;
-        document.getElementById('ui-buyin-amount').innerText = latestGameState.game.buyIn; // 读取当前房间设定的标准底金
+        document.getElementById('ui-buyin-amount').innerText = latestGameState.game.buyIn; 
         document.getElementById('buyin-console').classList.remove('hidden');
     }
     
@@ -434,7 +442,6 @@
     function confirmPlayerBuyIn() {
         send({ type: 'BUY_IN', name: myName });
         closeBuyInConsole();
-        // 如果是在观战等待中，UI上可以直接看到钱加上去了
     }
 
     function joinByCode() {
@@ -451,7 +458,12 @@
         ws = new WebSocket(wsUrl); 
         ws.onopen = () => {
             ws.send(JSON.stringify({ type: "PING" }));
-            if (myName !== "") ws.send(JSON.stringify({ type: "JOIN", name: myName }));
+            if (myName !== "") {
+                // 【核心修复：断线重连（或初次连通）时的夹带报到】
+                let joinMsg = { type: "JOIN", name: myName };
+                if (creatorSettings) { joinMsg.settings = creatorSettings; creatorSettings = null; }
+                ws.send(JSON.stringify(joinMsg));
+            }
         };
         ws.onmessage = (e) => { try { latestGameState = JSON.parse(e.data); renderEngine(latestGameState); } catch (err) {} };
     }
@@ -467,6 +479,12 @@
 
     function renderEngine(state) {
         if (!state || !state.game) return;
+
+        // 【核心修复：让左下角的房主面板，时刻跟随服务器真实数值同步！】
+        const elBuyin = document.getElementById('info-buyin');
+        const elBlinds = document.getElementById('info-blinds');
+        if (elBuyin) elBuyin.innerText = state.game.buyIn || 10000;
+        if (elBlinds) elBlinds.innerText = `${state.game.smallBlind || 50}/${state.game.bigBlind || 100}`;
 
         document.getElementById("ui-pot").innerText = "$" + (state.game.pot || 0);
         
@@ -567,13 +585,7 @@
 
         const pureMyName = myName.split('|')[1] || myName;
         const myDataRecord = playersArray.find(p => p && (p.name.split('|')[1] || p.name) === pureMyName);
-        if (myDataRecord && myDataRecord.isKicked) {
-            alert("您已被房主移出房间。");
-            myName = ""; localStorage.removeItem('poker_session_' + currentRoomId);
-            window.location.href = window.location.pathname; 
-            return;
-        }
-
+        
         let amISeated = !!myDataRecord;
         if (isWaitingForServer && amISeated) { isWaitingForServer = false; document.getElementById('sit-modal').classList.add('hidden'); document.getElementById('btn-confirm-sit').innerText = "确定入座"; document.getElementById('btn-confirm-sit').disabled = false; }
         if (amISeated) document.getElementById('btn-take-seat').classList.add('hidden'); else if (myName === "" || !isWaitingForServer) document.getElementById('btn-take-seat').classList.remove('hidden'); 
@@ -660,8 +672,6 @@
         if (amISeated) {
             const myData = playersArray.find(p => p && p.name === myName);
             if (!myData) return;
-            
-            // 我们已经有了独立的买入控制台，所以彻底移除旧的 rebuy-console 强弹逻辑
             
             if (state.game.status !== "WAITING" && state.game.status !== "SHOWDOWN" && !myData.folded && !myData.isSpectating && myData.chips > 0) {
                 if (isMyTurn) {

@@ -44,11 +44,10 @@
         .invite-pill { background: rgba(17, 21, 26, 0.95); padding: 20px 40px; border-radius: 50px; text-align: center; border: 1px solid #333; cursor: pointer; box-shadow: 0 10px 20px rgba(0,0,0,0.5); transition: 0.2s; }
         .invite-pill:hover { background: #1a2028; transform: scale(1.02); }
 
-        /* 右上角按钮组 */
+        /* 右上角按钮组（只保留战绩表） */
         .top-right-btns { position: absolute; top: 20px; right: 20px; display: flex; gap: 15px; z-index: 90; }
         .top-btn { background: rgba(17, 21, 26, 0.8); border: 1px solid var(--gold); padding: 10px 20px; border-radius: 20px; font-weight: bold; cursor: pointer; transition: 0.2s; }
         .btn-ledger { color: var(--gold); } .btn-ledger:hover { background: rgba(255, 215, 0, 0.2); }
-        .btn-buyin { color: #2ecc71; border-color: #2ecc71; } .btn-buyin:hover { background: rgba(46, 204, 113, 0.2); }
 
         .ledger-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 300; }
         .ledger-box { background: #1a1e24; border: 2px solid var(--gold); border-radius: 15px; padding: 25px; width: 90%; max-width: 500px; box-shadow: 0 10px 40px rgba(0,0,0,0.9); max-height: 80vh; overflow-y: auto;}
@@ -202,7 +201,6 @@
         <div class="top-left-logo" style="color:var(--gold)">POKERCHILL</div>
         
         <div class="top-right-btns" id="top-right-btns">
-            <button class="top-btn btn-buyin hidden" id="btn-buyin-top" onclick="openBuyInConsole()">💰 补充筹码</button>
             <button class="top-btn btn-ledger hidden" id="btn-ledger-top" onclick="openLedger()">📊 战绩表</button>
         </div>
 
@@ -255,14 +253,13 @@
         </div>
 
         <div id="buyin-console" class="action-console hidden" style="z-index: 105; bottom: 30px;">
-            <div class="turn-badge" style="background: var(--gold); color: black;">💳 补充筹码</div>
+            <div class="turn-badge" style="background: #e74c3c; color: white;">💳 筹码耗尽</div>
             <div style="text-align: center; color: white; margin: 15px 0 25px 0; font-size: 16px;">
-                是否确认按当前标准底金进行补充？<br>
+                您已进入观战状态。是否按当前标准底金进行补充？<br>
                 <strong style="color: var(--active-green); font-size: 32px; line-height: 2;">+$<span id="ui-buyin-amount">10000</span></strong>
             </div>
             <div class="main-action-row" style="height: 55px;">
-                <button class="action-btn btn-dark" onclick="closeBuyInConsole()"><span class="btn-title" style="font-size:16px;">取消返回</span></button>
-                <button class="action-btn btn-call" onclick="confirmPlayerBuyIn()" style="background: linear-gradient(145deg, #2ecc71, #219653);"><span class="btn-title" style="font-size:16px; color:black;">确定买入</span></button>
+                <button class="action-btn btn-call" onclick="confirmPlayerBuyIn()" style="background: linear-gradient(145deg, #2ecc71, #219653); width: 100%;"><span class="btn-title" style="font-size:18px; color:black; font-weight:900;">确定买入</span></button>
             </div>
         </div>
 
@@ -304,9 +301,10 @@
     let isWaitingForServer = false;
     let latestGameState = null;
     let countdownInterval = null; 
-    
-    // 【核心新增：用来向服务器传递初始设定的全局基因包】
     let creatorSettings = null; 
+
+    let prevBoardLength = 0;
+    let prevBurnLength = 0;
 
     function openLedger() { document.getElementById('ledger-modal').classList.remove('hidden'); document.getElementById('settlement-area').style.display = 'none'; }
     function closeLedger() { document.getElementById('ledger-modal').classList.add('hidden'); }
@@ -395,13 +393,12 @@
         localStorage.setItem('poker_session_' + currentRoomId, JSON.stringify({ name: myName, avatar: selectedAvatar }));
         const btn = document.getElementById('btn-confirm-sit'); btn.innerText = "正在入座..."; btn.disabled = true;
         
-        // 【核心修复：在发送报到指令时，夹带房间设定基因】
         if (ws && ws.readyState === 1) { 
             let joinMsg = { type: "JOIN", name: myName };
             if (creatorSettings) { joinMsg.settings = creatorSettings; creatorSettings = null; }
             ws.send(JSON.stringify(joinMsg)); 
         } 
-        else { connectWebSocket(); } // connectWebSocket里的 onopen 也会负责夹带发送
+        else { connectWebSocket(); } 
         
         setTimeout(() => { if (isWaitingForServer) { alert("云端无响应。请换个名字重试！"); btn.innerText = "确定入座"; btn.disabled = false; isWaitingForServer = false; } }, 5000);
     }
@@ -413,7 +410,6 @@
             window.history.pushState({}, "", `?room=${currentRoomId}`);
             document.getElementById('display-room-url').innerText = `ROOM CODE: ${currentRoomId}`;
             
-            // 【核心修复：只在创建房间时抓取一次设定，打包成基因包备用】
             const buyInVal = parseFloat(document.getElementById('set-buyin').value) || 10000;
             const sb = parseFloat(document.getElementById('set-sb').value) || 50;
             creatorSettings = { initialChips: buyInVal, smallBlind: sb, bigBlind: sb * 2 };
@@ -424,24 +420,14 @@
     }
 
     function triggerStartGame() {
-        // 去除之前强制向所有人发钱的逻辑，全员走自主入座买入
         send({ type: 'START_GAME', name: myName });
     }
 
     function forceRestart() { if(confirm("确定要强制结束当前对局吗？桌面的所有牌和底池将会被清空！")) send({ type: 'FORCE_RESTART', name: myName }); }
     
-    // 【完美重构的买入控制台调出逻辑】
-    function openBuyInConsole() {
-        if (!latestGameState || !latestGameState.game) return;
-        document.getElementById('ui-buyin-amount').innerText = latestGameState.game.buyIn; 
-        document.getElementById('buyin-console').classList.remove('hidden');
-    }
-    
-    function closeBuyInConsole() { document.getElementById('buyin-console').classList.add('hidden'); }
-    
     function confirmPlayerBuyIn() {
         send({ type: 'BUY_IN', name: myName });
-        closeBuyInConsole();
+        document.getElementById('buyin-console').classList.add('hidden');
     }
 
     function joinByCode() {
@@ -459,7 +445,6 @@
         ws.onopen = () => {
             ws.send(JSON.stringify({ type: "PING" }));
             if (myName !== "") {
-                // 【核心修复：断线重连（或初次连通）时的夹带报到】
                 let joinMsg = { type: "JOIN", name: myName };
                 if (creatorSettings) { joinMsg.settings = creatorSettings; creatorSettings = null; }
                 ws.send(JSON.stringify(joinMsg));
@@ -480,7 +465,6 @@
     function renderEngine(state) {
         if (!state || !state.game) return;
 
-        // 【核心修复：让左下角的房主面板，时刻跟随服务器真实数值同步！】
         const elBuyin = document.getElementById('info-buyin');
         const elBlinds = document.getElementById('info-blinds');
         if (elBuyin) elBuyin.innerText = state.game.buyIn || 10000;
@@ -518,10 +502,7 @@
 
         let playersArray = state.players || [];
         
-        if (playersArray.length > 0) {
-            document.getElementById('btn-ledger-top').classList.remove('hidden');
-            document.getElementById('btn-buyin-top').classList.remove('hidden');
-        }
+        if (playersArray.length > 0) document.getElementById('btn-ledger-top').classList.remove('hidden');
         
         let ledgerBody = "";
         playersArray.forEach(p => {
@@ -548,7 +529,7 @@
                     <div style="margin-bottom: 15px; font-size: 16px; line-height: 1.5;">${richMsg}</div>
                     <div style="font-size: 14px; color: #ff5b4c; background: rgba(0,0,0,0.6); padding: 8px 15px; border-radius: 12px; border: 1px solid #ff5b4c;">
                         ⚠️ 有玩家筹码耗尽，自动开局已暂停。<br>
-                        <span style="color:#aaa; font-size:12px;">没钱的玩家可点击右上角【补充筹码】，准备好后由房主开局。</span>
+                        <span style="color:#aaa; font-size:12px;">没钱的玩家可点击【确定买入】补充筹码。准备好后由房主开局。</span>
                     </div>
                 `;
             } else {
@@ -666,14 +647,30 @@
             } else { layer.innerHTML += `<div class="player-seat ${seatClass} ${posClass}"><div class="player-card empty-seat"></div></div>`; }
         }
 
-        const actionConsole = document.getElementById("action-console"); const waitingTip = document.getElementById("waiting-tip"); const tableContainer = document.getElementById("table-container"); const btnCallTitle = document.getElementById("btn-call-title"); const btnCallSub = document.getElementById("btn-call-sub"); const actBtns = ["btn-action-fold", "btn-action-call", "btn-action-raise"];
-        actionConsole.classList.add("hidden"); waitingTip.classList.add("hidden"); tableContainer.style.transform = "translateY(0) scale(1)";
+        const actionConsole = document.getElementById("action-console"); 
+        const buyinConsole = document.getElementById("buyin-console");
+        const waitingTip = document.getElementById("waiting-tip"); 
+        const tableContainer = document.getElementById("table-container"); 
+        const btnCallTitle = document.getElementById("btn-call-title"); 
+        const btnCallSub = document.getElementById("btn-call-sub"); 
+        const actBtns = ["btn-action-fold", "btn-action-call", "btn-action-raise"];
+        
+        actionConsole.classList.add("hidden"); 
+        buyinConsole.classList.add("hidden");
+        waitingTip.classList.add("hidden"); 
+        tableContainer.style.transform = "translateY(0) scale(1)";
 
         if (amISeated) {
             const myData = playersArray.find(p => p && p.name === myName);
             if (!myData) return;
             
-            if (state.game.status !== "WAITING" && state.game.status !== "SHOWDOWN" && !myData.folded && !myData.isSpectating && myData.chips > 0) {
+            // 【核心修复：只有筹码为0，且不在All-in火拼中（也就是已经出局、观战、结算或等待）时，才显示强制买入面板】
+            if (myData.chips === 0 && (state.game.status === "WAITING" || state.game.status === "SHOWDOWN" || myData.isOut || myData.isSpectating)) {
+                buyinConsole.classList.remove("hidden");
+                tableContainer.style.transform = "translateY(-60px) scale(0.95)";
+                document.getElementById('ui-buyin-amount').innerText = state.game.buyIn || 10000;
+            } 
+            else if (state.game.status !== "WAITING" && state.game.status !== "SHOWDOWN" && !myData.folded && !myData.isSpectating && myData.chips > 0) {
                 if (isMyTurn) {
                     actionConsole.classList.remove("hidden"); tableContainer.style.transform = "translateY(-60px) scale(0.95)";
                     const currentBet = Number(state.game.currentBet) || 0; const myBet = Number(myData.betThisRound) || 0; const myChips = Number(myData.chips) || 0; const bigBlind = Number(state.game.bigBlind) || 20;

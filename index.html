@@ -137,6 +137,7 @@
         #btn-take-seat { position:absolute; bottom:120px; left:50%; transform:translateX(-50%); padding: 15px 40px; border-radius: 50px; background:var(--gold); color:black; font-weight:bold; font-size:18px; border:none; cursor:pointer; z-index:30; box-shadow: 0 5px 15px rgba(0,0,0,0.5); transition: 0.2s;}
         #btn-take-seat:hover { transform: translateX(-50%) scale(1.05); }
 
+        /* 游戏动作控制台 */
         .action-console { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(17, 21, 26, 0.95); border: 1px solid #333; border-radius: 16px; padding: 20px; width: 480px; box-shadow: 0 20px 50px rgba(0,0,0,0.8); display: flex; flex-direction: column; gap: 15px; z-index: 100; }
         .turn-badge { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); background: #2ecc71; color: black; font-weight: 900; font-size: 13px; padding: 4px 15px; border-radius: 20px; letter-spacing: 1px; box-shadow: 0 4px 10px rgba(46, 204, 113, 0.4); }
         .raise-control-area { display: flex; flex-direction: column; gap: 12px; background: #1a2028; padding: 15px; border-radius: 12px; border: 1px solid #2a3441; }
@@ -201,8 +202,8 @@
         <div class="top-left-logo" style="color:var(--gold)">POKERCHILL</div>
         
         <div class="top-right-btns" id="top-right-btns">
-            <button class="top-btn btn-buyin" onclick="triggerPlayerBuyIn()">💰 补充筹码</button>
-            <button class="top-btn btn-ledger" onclick="openLedger()">📊 战绩表</button>
+            <button class="top-btn btn-buyin hidden" id="btn-buyin-top" onclick="openBuyInConsole()">💰 补充筹码</button>
+            <button class="top-btn btn-ledger hidden" id="btn-ledger-top" onclick="openLedger()">📊 战绩表</button>
         </div>
 
         <div id="table-container">
@@ -224,7 +225,7 @@
 
         <div class="host-panel hidden" id="host-panel">
             <div style="margin-bottom: 5px; opacity: 0.8; font-weight:bold; color:var(--gold);">👑 房主控制台</div>
-            <div style="margin-bottom: 10px; opacity: 0.6;">推荐买入 $<span id="info-buyin">0</span> | 盲注 <span id="info-blinds">0/0</span></div>
+            <div style="margin-bottom: 10px; opacity: 0.6;">标准买入 $<span id="info-buyin">0</span> | 盲注 <span id="info-blinds">0/0</span></div>
             <button onclick="triggerStartGame()" id="btn-start" class="host-btn btn-green">▶ 开始新一局</button>
             <button onclick="forceRestart()" id="btn-force-restart" class="host-btn btn-red">🛑 强制重开局</button>
         </div>
@@ -252,6 +253,19 @@
                 <button class="action-btn btn-raise" id="btn-action-raise"><span class="btn-title">RAISE</span><span class="btn-sub" id="btn-raise-sub">$0</span></button>
             </div>
         </div>
+
+        <div id="buyin-console" class="action-console hidden" style="z-index: 105; bottom: 30px;">
+            <div class="turn-badge" style="background: var(--gold); color: black;">💳 补充筹码</div>
+            <div style="text-align: center; color: white; margin: 15px 0 25px 0; font-size: 16px;">
+                是否确认自主购买 1 组标准筹码？<br>
+                <strong style="color: var(--active-green); font-size: 32px; line-height: 2;">+$<span id="ui-buyin-amount">10000</span></strong>
+            </div>
+            <div class="main-action-row" style="height: 55px;">
+                <button class="action-btn btn-dark" onclick="closeBuyInConsole()"><span class="btn-title" style="font-size:16px;">取消返回</span></button>
+                <button class="action-btn btn-call" onclick="confirmPlayerBuyIn()" style="background: linear-gradient(145deg, #2ecc71, #219653);"><span class="btn-title" style="font-size:16px; color:black;">确定买入</span></button>
+            </div>
+        </div>
+
     </div>
 
     <div id="ledger-modal" class="ledger-modal hidden">
@@ -301,7 +315,6 @@
     function generateSettlement() {
         if(!latestGameState || !latestGameState.players) return;
         let winners = []; let losers = [];
-        
         latestGameState.players.forEach(p => {
             if (p.isKicked) return;
             let net = p.chips - (p.totalBuyIn || 0);
@@ -309,13 +322,9 @@
             if (net > 0) winners.push({name: pName, amount: net});
             else if (net < 0) losers.push({name: pName, amount: -net}); 
         });
-
         winners.sort((a, b) => b.amount - a.amount);
         losers.sort((a, b) => b.amount - a.amount);
-
-        let html = "";
-        let i = 0, j = 0;
-        
+        let html = ""; let i = 0, j = 0;
         while(i < winners.length && j < losers.length) {
             let w = winners[i]; let l = losers[j];
             let settleAmt = Math.min(w.amount, l.amount);
@@ -324,7 +333,6 @@
             if (w.amount === 0) i++;
             if (l.amount === 0) j++;
         }
-        
         if (html === "") html = `<div class="settlement-line" style="color:#aaa;">全员盈亏平衡，无需转账。</div>`;
         document.getElementById('settlement-list').innerHTML = html;
         document.getElementById('settlement-area').style.display = 'block';
@@ -407,7 +415,6 @@
     }
 
     function triggerStartGame() {
-        // 房主只负责发牌和推进阶段，不再给所有 0 筹码的人无脑发钱了。
         const buyInVal = parseFloat(document.getElementById('info-buyin').innerText) || 10000;
         const sb = parseFloat(document.getElementById('info-blinds').innerText.split('/')[0]) || 50;
         send({ type: 'START_GAME', settings: { initialChips: buyInVal, smallBlind: sb, bigBlind: sb * 2 } });
@@ -415,14 +422,19 @@
 
     function forceRestart() { if(confirm("确定要强制结束当前对局吗？桌面的所有牌和底池将会被清空！")) send({ type: 'FORCE_RESTART', name: myName }); }
     
-    // 【核心新增：玩家随时自主买入筹码】
-    function triggerPlayerBuyIn() {
-        let defaultVal = document.getElementById('info-buyin').innerText || 10000;
-        let amt = prompt("请输入您想购买补充的筹码金额：", defaultVal);
-        if (amt !== null && !isNaN(amt) && parseInt(amt) > 0) {
-            send({ type: 'BUY_IN', name: myName, amount: parseInt(amt) });
-            alert(`已成功买入 $${amt}！\n(如果您当前处于无筹码状态，新筹码将在下一局发牌时生效)`);
-        }
+    // 【核心更新：呼出专业统一的买入控制台】
+    function openBuyInConsole() {
+        if (!latestGameState || !latestGameState.game) return;
+        document.getElementById('ui-buyin-amount').innerText = latestGameState.game.buyIn; // 读取当前房间设定的标准底金
+        document.getElementById('buyin-console').classList.remove('hidden');
+    }
+    
+    function closeBuyInConsole() { document.getElementById('buyin-console').classList.add('hidden'); }
+    
+    function confirmPlayerBuyIn() {
+        send({ type: 'BUY_IN', name: myName });
+        closeBuyInConsole();
+        // 如果是在观战等待中，UI上可以直接看到钱加上去了
     }
 
     function joinByCode() {
@@ -488,7 +500,11 @@
 
         let playersArray = state.players || [];
         
-        if (playersArray.length > 0) document.getElementById('top-right-btns').classList.remove('hidden');
+        if (playersArray.length > 0) {
+            document.getElementById('btn-ledger-top').classList.remove('hidden');
+            document.getElementById('btn-buyin-top').classList.remove('hidden');
+        }
+        
         let ledgerBody = "";
         playersArray.forEach(p => {
             if(p.isKicked) return; 
@@ -591,7 +607,6 @@
                 if (isActive && p.name === myName) isMyTurn = true;
                 const isOut = p.isOut === true; 
                 const isOffline = p.isOnline === false; 
-                // 【核心：如果在观战中，完全不参与发牌】
                 const isSpectating = p.isSpectating === true;
                 const isDealer = (p.realIndex === state.game.dealerIndex && state.game.status !== "WAITING" && !isSpectating);
 
@@ -645,6 +660,8 @@
         if (amISeated) {
             const myData = playersArray.find(p => p && p.name === myName);
             if (!myData) return;
+            
+            // 我们已经有了独立的买入控制台，所以彻底移除旧的 rebuy-console 强弹逻辑
             
             if (state.game.status !== "WAITING" && state.game.status !== "SHOWDOWN" && !myData.folded && !myData.isSpectating && myData.chips > 0) {
                 if (isMyTurn) {

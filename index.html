@@ -44,8 +44,12 @@
         .invite-pill { background: rgba(17, 21, 26, 0.95); padding: 20px 40px; border-radius: 50px; text-align: center; border: 1px solid #333; cursor: pointer; box-shadow: 0 10px 20px rgba(0,0,0,0.5); transition: 0.2s; }
         .invite-pill:hover { background: #1a2028; transform: scale(1.02); }
 
-        .btn-ledger { position: absolute; top: 20px; right: 20px; background: rgba(17, 21, 26, 0.8); border: 1px solid var(--gold); color: var(--gold); padding: 10px 20px; border-radius: 20px; font-weight: bold; cursor: pointer; z-index: 90; transition: 0.2s; }
-        .btn-ledger:hover { background: rgba(255, 215, 0, 0.2); }
+        /* 右上角按钮组 */
+        .top-right-btns { position: absolute; top: 20px; right: 20px; display: flex; gap: 15px; z-index: 90; }
+        .top-btn { background: rgba(17, 21, 26, 0.8); border: 1px solid var(--gold); padding: 10px 20px; border-radius: 20px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .btn-ledger { color: var(--gold); } .btn-ledger:hover { background: rgba(255, 215, 0, 0.2); }
+        .btn-buyin { color: #2ecc71; border-color: #2ecc71; } .btn-buyin:hover { background: rgba(46, 204, 113, 0.2); }
+
         .ledger-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 300; }
         .ledger-box { background: #1a1e24; border: 2px solid var(--gold); border-radius: 15px; padding: 25px; width: 90%; max-width: 500px; box-shadow: 0 10px 40px rgba(0,0,0,0.9); max-height: 80vh; overflow-y: auto;}
         .ledger-table { width: 100%; border-collapse: collapse; margin-top: 15px; color: white; }
@@ -53,8 +57,6 @@
         .ledger-table th { color: #8ca0b3; font-size: 13px; letter-spacing: 1px; }
         .text-green { color: #2ecc71; font-weight: bold; }
         .text-red { color: #e74c3c; font-weight: bold; }
-
-        /* 结账方案块 */
         .settlement-area { margin-top: 20px; padding: 15px; background: #242b35; border-radius: 10px; border: 1px dashed #444; display: none;}
         .settlement-title { font-size: 14px; color: var(--gold); margin-bottom: 10px; font-weight: bold; text-align: center;}
         .settlement-line { font-size: 15px; margin-bottom: 8px; text-align: center; padding: 5px; background: rgba(0,0,0,0.4); border-radius: 5px;}
@@ -98,6 +100,7 @@
         
         .status-badge-inner { font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 4px; margin: 4px auto; width: fit-content; text-align: center; z-index: 2; letter-spacing: 1px; }
         .bg-offline { background: #607d8b; color: white; } 
+        .bg-spec { background: #444; color: #ccc; border: 1px solid #777;}
         .bg-fold { background: rgba(217, 83, 121, 0.9); color: white; }
         .bg-think { background: rgba(46, 204, 113, 0.9); color: black; }
         .bg-allin { background: rgba(255, 215, 0, 0.9); color: black; }
@@ -177,7 +180,7 @@
         <div class="menu-card" style="width: 380px;">
             <div class="settings-header"><span onclick="navTo('view-home')">⟵ Back</span><span style="color:var(--gold);" onclick="createRoomFlow()">Continue ⟶</span></div>
             <h2 style="margin-top:0; color:white; letter-spacing: 1px;">CASH GAME</h2>
-            <div class="setting-item"><span class="setting-label">买入金额 (Buy-in)</span><input type="number" id="set-buyin" class="setting-input" value="10000"></div>
+            <div class="setting-item"><span class="setting-label">默认买入额 (Buy-in)</span><input type="number" id="set-buyin" class="setting-input" value="10000"></div>
             <div class="setting-item"><span class="setting-label">小盲注 (Small Blind)</span><input type="number" id="set-sb" class="setting-input" value="50" step="any"></div>
         </div>
     </div>
@@ -196,7 +199,11 @@
 
     <div id="view-game" class="view-screen hidden">
         <div class="top-left-logo" style="color:var(--gold)">POKERCHILL</div>
-        <button class="btn-ledger hidden" id="btn-ledger" onclick="openLedger()">📊 战绩计分板</button>
+        
+        <div class="top-right-btns" id="top-right-btns">
+            <button class="top-btn btn-buyin" onclick="triggerPlayerBuyIn()">💰 补充筹码</button>
+            <button class="top-btn btn-ledger" onclick="openLedger()">📊 战绩表</button>
+        </div>
 
         <div id="table-container">
             <div class="poker-table">
@@ -217,17 +224,12 @@
 
         <div class="host-panel hidden" id="host-panel">
             <div style="margin-bottom: 5px; opacity: 0.8; font-weight:bold; color:var(--gold);">👑 房主控制台</div>
-            <div style="margin-bottom: 10px; opacity: 0.6;">$<span id="info-buyin">0</span> | 盲注 <span id="info-blinds">0/0</span></div>
+            <div style="margin-bottom: 10px; opacity: 0.6;">推荐买入 $<span id="info-buyin">0</span> | 盲注 <span id="info-blinds">0/0</span></div>
             <button onclick="triggerStartGame()" id="btn-start" class="host-btn btn-green">▶ 开始新一局</button>
             <button onclick="forceRestart()" id="btn-force-restart" class="host-btn btn-red">🛑 强制重开局</button>
         </div>
 
         <div id="waiting-tip" class="waiting-tip hidden" style="bottom: 30px;">等待对手行动...</div>
-
-        <div id="rebuy-console" class="action-console hidden" style="justify-content: center; align-items: center; padding: 30px;">
-            <h3 style="margin-top:0; color:#ff3b3b; font-size: 24px;">筹码耗尽，您已出局</h3>
-            <button onclick="triggerRebuy()" style="width:100%; padding: 15px; background: var(--gold); font-size: 18px; font-weight: bold; border-radius: 10px; cursor: pointer; border: none; color: black;">💰 补充筹码重新入局</button>
-        </div>
 
         <div id="action-console" class="action-console hidden">
             <div class="turn-badge">YOUR TURN</div>
@@ -296,7 +298,6 @@
     function openLedger() { document.getElementById('ledger-modal').classList.remove('hidden'); document.getElementById('settlement-area').style.display = 'none'; }
     function closeLedger() { document.getElementById('ledger-modal').classList.add('hidden'); }
 
-    // 【核心新增：生成极简结账方案的算法】
     function generateSettlement() {
         if(!latestGameState || !latestGameState.players) return;
         let winners = []; let losers = [];
@@ -315,13 +316,10 @@
         let html = "";
         let i = 0, j = 0;
         
-        // 贪心对冲匹配算法
         while(i < winners.length && j < losers.length) {
             let w = winners[i]; let l = losers[j];
             let settleAmt = Math.min(w.amount, l.amount);
-            
             html += `<div class="settlement-line"><span class="text-red">${l.name}</span> 应支付给 <span class="text-green">${w.name}</span> : <strong style="color:white;">$${settleAmt}</strong></div>`;
-            
             w.amount -= settleAmt; l.amount -= settleAmt;
             if (w.amount === 0) i++;
             if (l.amount === 0) j++;
@@ -409,13 +407,23 @@
     }
 
     function triggerStartGame() {
+        // 房主只负责发牌和推进阶段，不再给所有 0 筹码的人无脑发钱了。
         const buyInVal = parseFloat(document.getElementById('info-buyin').innerText) || 10000;
         const sb = parseFloat(document.getElementById('info-blinds').innerText.split('/')[0]) || 50;
         send({ type: 'START_GAME', settings: { initialChips: buyInVal, smallBlind: sb, bigBlind: sb * 2 } });
     }
 
     function forceRestart() { if(confirm("确定要强制结束当前对局吗？桌面的所有牌和底池将会被清空！")) send({ type: 'FORCE_RESTART', name: myName }); }
-    function triggerRebuy() { const buyInVal = parseFloat(document.getElementById('info-buyin').innerText) || 10000; send({ type: 'REBUY', name: myName, amount: buyInVal }); }
+    
+    // 【核心新增：玩家随时自主买入筹码】
+    function triggerPlayerBuyIn() {
+        let defaultVal = document.getElementById('info-buyin').innerText || 10000;
+        let amt = prompt("请输入您想购买补充的筹码金额：", defaultVal);
+        if (amt !== null && !isNaN(amt) && parseInt(amt) > 0) {
+            send({ type: 'BUY_IN', name: myName, amount: parseInt(amt) });
+            alert(`已成功买入 $${amt}！\n(如果您当前处于无筹码状态，新筹码将在下一局发牌时生效)`);
+        }
+    }
 
     function joinByCode() {
         currentRoomId = document.getElementById('join-code').value.trim().toUpperCase();
@@ -480,7 +488,7 @@
 
         let playersArray = state.players || [];
         
-        if (playersArray.length > 0) document.getElementById('btn-ledger').classList.remove('hidden');
+        if (playersArray.length > 0) document.getElementById('top-right-btns').classList.remove('hidden');
         let ledgerBody = "";
         playersArray.forEach(p => {
             if(p.isKicked) return; 
@@ -494,7 +502,7 @@
 
         const banner = document.getElementById("winner-banner");
         if (state.game.status === "SHOWDOWN") {
-            const hasBankrupt = playersArray.some(p => !p.isKicked && (p.chips === 0 || p.isOut));
+            const hasBankrupt = playersArray.some(p => !p.isKicked && (p.chips === 0 || p.isOut) && !p.isSpectating);
             
             let richMsg = state.game.winMessage;
             richMsg = richMsg.replace(/(10|[2-9JQKA])[♥♦]/g, '<span class="msg-red-card">$&</span>');
@@ -503,10 +511,10 @@
             if (hasBankrupt) {
                 if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
                 banner.innerHTML = `
-                    <div style="margin-bottom: 15px; font-size: 18px;">${richMsg}</div>
+                    <div style="margin-bottom: 15px; font-size: 16px; line-height: 1.5;">${richMsg}</div>
                     <div style="font-size: 14px; color: #ff5b4c; background: rgba(0,0,0,0.6); padding: 8px 15px; border-radius: 12px; border: 1px solid #ff5b4c;">
                         ⚠️ 有玩家筹码耗尽，自动开局已暂停。<br>
-                        <span style="color:#aaa; font-size:12px;">请等待补充筹码，或由房主手动开局。</span>
+                        <span style="color:#aaa; font-size:12px;">没钱的玩家可点击右上角【补充筹码】，准备好后由房主开局。</span>
                     </div>
                 `;
             } else {
@@ -518,7 +526,7 @@
                     }, 1000);
                 }
                 banner.innerHTML = `
-                    <div style="margin-bottom: 15px; font-size: 18px;">${richMsg}</div>
+                    <div style="margin-bottom: 15px; font-size: 16px; line-height: 1.5;">${richMsg}</div>
                     <div style="font-size: 14px; color: #ccc; display: flex; align-items: center; justify-content: center; gap: 15px; background: rgba(0,0,0,0.6); padding: 8px 15px; border-radius: 12px;">
                         <span>下一局: <span id="auto-start-cd" style="color:var(--gold); font-size:20px; font-weight:900;">10</span>s</span>
                         <button onclick="send({type:'NEXT_HAND'})" style="padding: 6px 15px; background: var(--active-green); color: black; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">立刻开始</button>
@@ -583,14 +591,15 @@
                 if (isActive && p.name === myName) isMyTurn = true;
                 const isOut = p.isOut === true; 
                 const isOffline = p.isOnline === false; 
-                const isWaitingNextHand = p.isWaitingNextHand === true;
-                const isDealer = (p.realIndex === state.game.dealerIndex && state.game.status !== "WAITING");
+                // 【核心：如果在观战中，完全不参与发牌】
+                const isSpectating = p.isSpectating === true;
+                const isDealer = (p.realIndex === state.game.dealerIndex && state.game.status !== "WAITING" && !isSpectating);
 
                 let displayAvatar = '😎'; let displayName = p.name;
                 if (p.name.includes('|')) { const parts = p.name.split('|'); displayAvatar = parts[0]; displayName = parts[1]; }
 
                 let cardsHtml = "";
-                if (p.hand && p.hand.length > 0) {
+                if (p.hand && p.hand.length > 0 && !isSpectating) {
                     cardsHtml = p.hand.map((c, idx) => {
                         const isHidden = (p.name !== myName && state.game.status !== "SHOWDOWN") || c === "??";
                         const isRed = !isHidden && (c.includes('♥') || c.includes('♦'));
@@ -601,7 +610,7 @@
 
                 let badgeHtml = "";
                 if (isOffline) badgeHtml = `<div class="status-badge-inner bg-offline">已离线</div>`;
-                else if (isWaitingNextHand) badgeHtml = `<div class="status-badge-inner bg-offline" style="background:#555;">等待下局</div>`;
+                else if (isSpectating) badgeHtml = `<div class="status-badge-inner bg-spec">👀 观战中</div>`;
                 else if (p.folded && !isOut) badgeHtml = `<div class="status-badge-inner bg-fold">已弃牌</div>`;
                 else if (p.chips === 0 && !isOut && !p.folded && state.game.status !== "WAITING") badgeHtml = `<div class="status-badge-inner bg-allin">ALL-IN</div>`;
                 else if (isActive && !p.folded && !isOut) badgeHtml = `<div class="status-badge-inner bg-think">思考中...</div>`;
@@ -613,10 +622,10 @@
                     <div class="player-seat ${seatClass} ${posClass}">
                         ${(p.winAmount > 0 && state.game.status === "SHOWDOWN") ? `<div class="win-fly-text">+$${p.winAmount}</div>` : ''}
                         
-                        <div class="hole-cards">${p.folded || isOut || isWaitingNextHand ? '' : cardsHtml}</div>
+                        <div class="hole-cards">${p.folded || isOut || isSpectating ? '' : cardsHtml}</div>
                         ${isDealer ? `<div class="dealer-btn">D</div>` : ''}
 
-                        <div class="player-card ${isActive && !p.folded && !isOut && !isWaitingNextHand ? 'active' : ''} ${isOut ? 'out-state' : ''}" style="${(p.folded && !isOut) || isWaitingNextHand ? 'opacity: 0.6;' : ''}">
+                        <div class="player-card ${isActive && !p.folded && !isOut && !isSpectating ? 'active' : ''} ${isOut || isSpectating ? 'out-state' : ''}" style="${(p.folded && !isOut) ? 'opacity: 0.6;' : ''}">
                             ${kickHtml}
                             <div class="player-avatar"><span>${displayAvatar}</span></div>
                             <div style="min-height:22px;">${badgeHtml}</div>
@@ -624,21 +633,20 @@
                             <div class="player-chips">$${p.chips}</div>
                         </div>
                         
-                        ${isOut ? `<div class="eliminated-x">❌</div>` : ''}
                         ${(p.betThisRound > 0 && state.game.status !== "WAITING") ? `<div class="bet-badge">⚪ $${p.betThisRound}</div>` : ''}
                     </div>
                 `;
             } else { layer.innerHTML += `<div class="player-seat ${seatClass} ${posClass}"><div class="player-card empty-seat"></div></div>`; }
         }
 
-        const actionConsole = document.getElementById("action-console"); const rebuyConsole = document.getElementById("rebuy-console"); const waitingTip = document.getElementById("waiting-tip"); const tableContainer = document.getElementById("table-container"); const btnCallTitle = document.getElementById("btn-call-title"); const btnCallSub = document.getElementById("btn-call-sub"); const actBtns = ["btn-action-fold", "btn-action-call", "btn-action-raise"];
-        actionConsole.classList.add("hidden"); rebuyConsole.classList.add("hidden"); waitingTip.classList.add("hidden"); tableContainer.style.transform = "translateY(0) scale(1)";
+        const actionConsole = document.getElementById("action-console"); const waitingTip = document.getElementById("waiting-tip"); const tableContainer = document.getElementById("table-container"); const btnCallTitle = document.getElementById("btn-call-title"); const btnCallSub = document.getElementById("btn-call-sub"); const actBtns = ["btn-action-fold", "btn-action-call", "btn-action-raise"];
+        actionConsole.classList.add("hidden"); waitingTip.classList.add("hidden"); tableContainer.style.transform = "translateY(0) scale(1)";
 
         if (amISeated) {
             const myData = playersArray.find(p => p && p.name === myName);
             if (!myData) return;
-            if (myData.isOut) { rebuyConsole.classList.remove("hidden"); return; }
-            if (state.game.status !== "WAITING" && state.game.status !== "SHOWDOWN" && !myData.folded && myData.chips > 0) {
+            
+            if (state.game.status !== "WAITING" && state.game.status !== "SHOWDOWN" && !myData.folded && !myData.isSpectating && myData.chips > 0) {
                 if (isMyTurn) {
                     actionConsole.classList.remove("hidden"); tableContainer.style.transform = "translateY(-60px) scale(0.95)";
                     const currentBet = Number(state.game.currentBet) || 0; const myBet = Number(myData.betThisRound) || 0; const myChips = Number(myData.chips) || 0; const bigBlind = Number(state.game.bigBlind) || 20;

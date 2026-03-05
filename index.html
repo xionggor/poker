@@ -353,7 +353,6 @@
 <script>
     const BACKEND_URL = "https://poker-server.zxc717209554.workers.dev";
     
-    // 【方案 B：真实的物理坐标绝对视角】
     const SEAT_ORDER = [
         's-btm-c', 's-btm-l', 's-lft-b', 's-lft-t', 's-top-l', 
         's-top-c', 's-top-r', 's-rgt-t', 's-rgt-b', 's-btm-r'
@@ -419,15 +418,21 @@
         if(!latestGameState || !latestGameState.game) return;
         const currentBet = latestGameState.game.currentBet || 0;
         const pot = latestGameState.game.pot || 0;
-        const minRaiseTo = parseInt(slider.min) || 0;
+        
+        // 【防黑客核心：绑定云端下发的最后有效加注额】
+        const minRaiseDelta = latestGameState.game.lastValidRaise || latestGameState.game.bigBlind || 5;
+        const minRaiseTo = currentBet + minRaiseDelta;
+        
         let target = minRaiseTo;
         if (type === 'MIN') target = minRaiseTo;
         if (type === 'HALF') target = currentBet + (pot / 2);
         if (type === 'POT') target = currentBet + pot;
         if (type === 'ALLIN') target = parseInt(slider.max);
+        
         target = Math.floor(target);
         if (target < minRaiseTo) target = minRaiseTo;
         if (target > parseInt(slider.max)) target = parseInt(slider.max);
+        
         slider.value = target; updateSliderDisplay();
     }
 
@@ -630,7 +635,6 @@
         const lobbyList = document.getElementById('lobby-list');
         const unseatedPlayers = playersArray.filter(p => p.seatIndex === -1 && !p.isKicked);
         
-        // 只有在真的有玩家被困在候场区，或者处于抽牌环节时，才显示候场区
         if (unseatedPlayers.length > 0 || state.game.status === "LOBBY" || state.game.status === "DRAWING" || state.game.status === "PICK_SEAT") {
             lobbyZone.classList.remove('hidden');
             lobbyList.innerHTML = unseatedPlayers.map(p => {
@@ -785,7 +789,7 @@
                     </div>
                 `;
             } else { 
-                // 【核心解除限制：房主随时随地可以看见空位的 + 号进行空降】
+                // 【彻底解禁：任何非抽牌期间，房主皆可点击 + 号加机器人！】
                 let addBotHtml = '';
                 if (state.game.status === "PICK_SEAT" && isWinner) {
                     addBotHtml = `<div class="add-bot-btn pulse-gold" onclick="send({type:'SELECT_SEAT', name: '${myName}', seatIndex: ${i}})">+</div>`;
@@ -818,12 +822,19 @@
             else if (state.game.status !== "WAITING" && state.game.status !== "LOBBY" && state.game.status !== "DRAWING" && state.game.status !== "PICK_SEAT" && state.game.status !== "SHOWDOWN" && !myDataRecord.folded && !myDataRecord.isSpectating && myDataRecord.chips > 0) {
                 if (isMyTurn) {
                     actionConsole.classList.remove("hidden"); tableContainer.style.transform = "translateY(-60px) scale(0.95)";
-                    const currentBet = Number(state.game.currentBet) || 0; const myBet = Number(myDataRecord.betThisRound) || 0; const myChips = Number(myDataRecord.chips) || 0; const bigBlind = Number(state.game.bigBlind) || 20;
+                    const currentBet = Number(state.game.currentBet) || 0; const myBet = Number(myDataRecord.betThisRound) || 0; const myChips = Number(myDataRecord.chips) || 0; 
+                    
+                    // 【防黑客 UI：动态读取合法最小加注差额】
+                    const minRaiseDelta = Number(state.game.lastValidRaise) || Number(state.game.bigBlind) || 5; 
+                    
                     const callAmount = currentBet - myBet;
                     if (callAmount <= 0) { btnCallTitle.innerText = "CHECK"; btnCallSub.innerText = "过牌 (免费)"; document.getElementById("btn-action-call").style.background = "linear-gradient(145deg, #2ecc71, #219653)"; } 
                     else { btnCallTitle.innerText = "CALL"; btnCallSub.innerText = "$" + callAmount; document.getElementById("btn-action-call").style.background = "linear-gradient(145deg, #1976d2, #115293)"; }
-                    const minRaiseTo = currentBet + bigBlind; slider.min = minRaiseTo; slider.max = myChips + myBet; 
+                    
+                    const minRaiseTo = currentBet + minRaiseDelta; 
+                    slider.min = minRaiseTo; slider.max = myChips + myBet; 
                     if (parseInt(slider.value) < minRaiseTo || parseInt(slider.value) > slider.max) slider.value = minRaiseTo; updateSliderDisplay();
+                    
                     document.getElementById("btn-action-fold").onclick = () => send({type:'ACTION', name: myName, action:'FOLD'});
                     document.getElementById("btn-action-call").onclick = () => send({type:'ACTION', name: myName, action:'CALL'});
                     document.getElementById("btn-action-raise").onclick = () => { const raiseTo = parseInt(slider.value); const extraAmount = raiseTo - currentBet; send({type:'ACTION', name: myName, action:'RAISE', amount: extraAmount}); };

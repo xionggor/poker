@@ -296,22 +296,26 @@
         <div id="action-console" class="action-console hidden">
             <div class="turn-badge">YOUR TURN</div>
             <div class="raise-control-area">
-                <div class="raise-header">
-                    <span>Raise To (加注至):</span>
-                    <span class="raise-amount-display" id="display-amount">$0</span>
-                </div>
-                <input type="range" class="custom-slider" id="raise-slider" oninput="updateSliderDisplay()" step="any">
-                <div class="quick-bet-row">
-                    <button class="qb-btn" onclick="quickBet('MIN')">MIN</button>
-                    <button class="qb-btn" onclick="quickBet('HALF')">1/2 POT</button>
-                    <button class="qb-btn" onclick="quickBet('POT')">POT</button>
-                    <button class="qb-btn all-in" onclick="quickBet('ALLIN')">ALL-IN</button>
-                </div>
+            <div class="raise-header">
+                <span>Raise To (加注至):</span>
+                <span class="raise-amount-display" id="display-amount">¥0.00</span>
             </div>
-            <div class="main-action-row">
-                <button class="action-btn btn-fold" id="btn-action-fold"><span class="btn-title">FOLD</span><span class="btn-sub">弃牌</span></button>
-                <button class="action-btn btn-call" id="btn-action-call"><span class="btn-title" id="btn-call-title">CALL</span><span class="btn-sub" id="btn-call-sub">$0</span></button>
-                <button class="action-btn btn-raise" id="btn-action-raise"><span class="btn-title">RAISE</span><span class="btn-sub" id="btn-raise-sub">$0</span></button>
+            
+            <div style="display: flex; gap: 10px; margin-top: 5px;">
+                <input type="number" id="custom-bet-input" 
+                       style="flex: 1; background: #11151a; border: 1px solid #444; color: var(--gold); padding: 8px; border-radius: 6px; text-align: center; font-size: 16px; font-weight: bold; outline: none;" 
+                       placeholder="✍️ 点击手动输入"
+                       step="0.01"
+                       oninput="syncInputToSlider(this.value)">
+            </div>
+
+            <input type="range" class="custom-slider" id="raise-slider" oninput="updateSliderDisplay()" step="0.01">
+            
+            <div class="quick-bet-row">
+                <button class="qb-btn" onclick="quickBet('MIN')">MIN</button>
+                <button class="qb-btn" onclick="quickBet('HALF')">1/2 POT</button>
+                <button class="qb-btn" onclick="quickBet('POT')">POT</button>
+                <button class="qb-btn all-in" onclick="quickBet('ALLIN')">ALL-IN</button>
             </div>
         </div>
 
@@ -409,14 +413,39 @@
     const displayAmount = document.getElementById('display-amount');
     const btnRaiseSub = document.getElementById('btn-raise-sub');
 
-    function updateSliderDisplay() {
+  function updateSliderDisplay() {
         // 【核心修复2：解除 parseInt 的强转，完美保留小数】
-        displayAmount.innerText = "$" + slider.value;
-        btnRaiseSub.innerText = "$" + slider.value;
-        if(parseFloat(slider.value) >= parseFloat(slider.max)) { displayAmount.innerText = "ALL-IN"; btnRaiseSub.innerText = "ALL-IN"; }
+        // 修改：使用 toFixed(2) 强制保留两位小数，并把 $ 改成 ¥
+        let displayVal = parseFloat(slider.value).toFixed(2);
+        displayAmount.innerText = "¥" + displayVal;
+        btnRaiseSub.innerText = "¥" + displayVal;
+        
+        // 新增：让数值同步到你刚才添加的输入框里
+        const customInput = document.getElementById('custom-bet-input');
+        if (customInput && document.activeElement !== customInput) {
+            customInput.value = displayVal;
+        }
+
+        // 原有逻辑保留：判断是否 ALL-IN
+        if(parseFloat(slider.value) >= parseFloat(slider.max)) { 
+            displayAmount.innerText = "ALL-IN"; 
+            btnRaiseSub.innerText = "ALL-IN"; 
+        }
+    }
+
+    // 新增：独立的手动输入控制函数
+    function syncInputToSlider(val) {
+        let num = parseFloat(val);
+        if (!isNaN(num)) {
+            if (num > parseFloat(slider.max)) num = parseFloat(slider.max);
+            if (num < parseFloat(slider.min)) num = parseFloat(slider.min);
+            slider.value = num;
+            updateSliderDisplay();
+        }
     }
 
     function quickBet(type) {
+        // 以下 quickBet 代码完全保持原样，未做任何删除
         if(!latestGameState || !latestGameState.game) return;
         const currentBet = latestGameState.game.currentBet || 0;
         const pot = latestGameState.game.pot || 0;
@@ -431,14 +460,13 @@
         if (type === 'ALLIN') target = parseFloat(slider.max);
         
         // 保留两位小数，防止无限浮点
-        target = Math.round(target * 100) / 100;
+      target = Math.round(target * 100) / 100;
         
         if (target < minRaiseTo) target = minRaiseTo;
         if (target > parseFloat(slider.max)) target = parseFloat(slider.max);
         
         slider.value = target; updateSliderDisplay();
     }
-
     function checkAutoLogin() {
         if (!currentRoomId) return false;
         const saved = localStorage.getItem('poker_session_' + currentRoomId);

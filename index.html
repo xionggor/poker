@@ -110,15 +110,19 @@
         .add-bot-btn.pulse-gold { color: var(--gold); animation: pulseGold 1.5s infinite; background: rgba(255, 215, 0, 0.2); }
         @keyframes pulseGold { 0% { box-shadow: 0 0 0 0 rgba(255,215,0,0.7); } 70% { box-shadow: 0 0 0 15px rgba(255,215,0,0); } 100% { box-shadow: 0 0 0 0 rgba(255,215,0,0); } }
 
-        /* 【新视觉：大小盲标志牌位】 */
+        /* 【新视觉：单字母极简盲注徽章】 */
         .dealer-badges { position: absolute; display: flex; gap: 4px; z-index: 20; align-items: center; justify-content: center; }
         .dealer-btn { width: 22px; height: 22px; background: white; color: black; border: 2px solid #555; border-radius: 50%; font-weight: 900; font-size: 11px; display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 6px rgba(0,0,0,0.6); }
-        .badge-sb { background: #349feb; color: white; border-color: #1976d2;}
-        .badge-bb { background: #f39c12; color: black; border-color: #d68910;}
+        .badge-s { background: #349feb; color: white; border-color: #1976d2;}
+        .badge-b { background: #f39c12; color: black; border-color: #d68910;}
         .pos-bottom .dealer-badges { top: -15px; right: -30px; }
         .pos-top .dealer-badges { bottom: -15px; right: -30px; }
         .pos-left .dealer-badges { top: -15px; right: -45px; }
         .pos-right .dealer-badges { top: -15px; left: -45px; flex-direction: row-reverse; }
+
+        /* 【新视觉：站立游戏生存标志】 */
+        .stand-indicator { position: absolute; top: -10px; left: 0; background: #e74c3c; color: white; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 4px; z-index: 25; box-shadow: 0 2px 5px rgba(0,0,0,0.5); border: 1px solid #ff5b4c; }
+        .sit-indicator { position: absolute; top: -10px; left: 0; background: #2ecc71; color: black; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 4px; z-index: 25; box-shadow: 0 2px 5px rgba(0,0,0,0.5); border: 1px solid #219653; }
 
         .player-avatar { padding-top: 8px; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2;}
         .player-avatar span { font-size: 26px; line-height: 1; }
@@ -166,9 +170,8 @@
         .raise-control-area { display: flex; flex-direction: column; gap: 12px; background: #1a2028; padding: 15px; border-radius: 12px; border: 1px solid #2a3441; }
         .raise-header { display: flex; justify-content: space-between; align-items: center; font-size: 14px; color: #8ca0b3; font-weight: bold; }
         
-        /* 【神级输入框】防手贱无箭头框 */
-        .raise-input-box { background: transparent; border: none; border-bottom: 2px solid var(--gold); color: var(--gold); font-size: 24px; font-weight: 900; width: 90px; text-align: center; outline: none; padding-bottom: 2px;}
-        .raise-input-box::-webkit-outer-spin-button, .raise-input-box::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        /* 还原：去除输入框，恢复数字显示 */
+        .raise-amount-display { font-size: 24px; color: var(--gold); font-weight: 900; letter-spacing: 1px; }
         
         /* 强制 0.25 步长的滑动条 */
         .custom-slider { -webkit-appearance: none; width: 100%; height: 6px; border-radius: 3px; background: #333; outline: none; margin: 10px 0; }
@@ -215,12 +218,8 @@
                 <input type="number" id="set-buyin" class="setting-input" value="30">
             </div>
             <div class="setting-item">
-                <span class="setting-label">小盲注 (Small Blind)</span>
-                <input type="number" id="set-sb" class="setting-input" value="2.5" step="any">
-            </div>
-            <div class="setting-item">
-                <span class="setting-label">思考限时 (秒, 0为无限制)</span>
-                <input type="number" id="set-timer" class="setting-input" value="0">
+                <span class="setting-label">小盲注 (默认 0.25)</span>
+                <input type="number" id="set-sb" class="setting-input" value="0.25" step="0.25">
             </div>
             <div class="setting-item">
                 <span class="setting-label">机器人难度</span>
@@ -232,6 +231,10 @@
             <div class="setting-item" style="border-top: 1px dashed #444; padding-top: 15px;">
                 <span class="setting-label" style="color:var(--gold);">趣味抽牌选座 (抢庄)</span>
                 <input type="checkbox" id="set-enable-draw" style="width:20px; height:20px; cursor:pointer;">
+            </div>
+            <div class="setting-item">
+                <span class="setting-label" style="color:#e74c3c;">🦑 鱿鱼生存模式 (Stand Up)</span>
+                <input type="checkbox" id="set-enable-standup" style="width:20px; height:20px; cursor:pointer;">
             </div>
         </div>
     </div>
@@ -284,8 +287,13 @@
             </div>
         </div>
         
+        <div id="uncontested-action-container" class="hidden" style="position:absolute; bottom:120px; left:50%; transform:translateX(-50%); z-index:105; display:flex; gap:15px;">
+            <button onclick="triggerMuckCards()" style="background:#2a3441; color:white; font-weight:bold; padding:10px 20px; border-radius:20px; border:1px solid #444; cursor:pointer;">🤫 默默收下底池</button>
+            <button onclick="triggerShowCards()" style="background:linear-gradient(145deg, #ffd700, #d4b400); color:black; font-weight:900; padding:10px 25px; border-radius:20px; border:2px solid #fff; box-shadow:0 10px 20px rgba(0,0,0,0.6); cursor:pointer; animation: pulseGold 2s infinite;">👀 翻开底牌装 X</button>
+        </div>
+
         <div id="show-cards-container" class="hidden" style="position:absolute; bottom:120px; left:50%; transform:translateX(-50%); z-index:105;">
-            <button onclick="triggerShowCards()" style="background:linear-gradient(145deg, #ffd700, #d4b400); color:black; font-weight:900; padding:10px 25px; border-radius:20px; border:2px solid #fff; box-shadow:0 10px 20px rgba(0,0,0,0.6); cursor:pointer; font-size:16px; animation: pulseGold 2s infinite;">👀 向全桌亮出底牌</button>
+            <button onclick="triggerShowCards()" style="background:linear-gradient(145deg, #ffd700, #d4b400); color:black; font-weight:900; padding:10px 25px; border-radius:20px; border:2px solid #fff; box-shadow:0 10px 20px rgba(0,0,0,0.6); cursor:pointer; font-size:16px; animation: pulseGold 2s infinite;">👀 向全桌展示弃牌</button>
         </div>
 
         <div class="lobby-zone hidden" id="lobby-zone">
@@ -310,12 +318,9 @@
             <div class="raise-control-area">
                 <div class="raise-header">
                     <span>Raise To (加注至):</span>
-                    <div style="display:flex; align-items:center;">
-                        <span style="font-size:24px; color:var(--gold); font-weight:900;">$</span>
-                        <input type="number" id="raise-input" class="raise-input-box" step="0.25" onchange="syncInputToSlider()">
-                    </div>
+                    <span class="raise-amount-display" id="display-amount">$0</span>
                 </div>
-                <input type="range" class="custom-slider" id="raise-slider" oninput="syncSliderToInput()" step="0.25">
+                <input type="range" class="custom-slider" id="raise-slider" oninput="updateSliderDisplay()" step="0.25">
                 <div class="quick-bet-row">
                     <button class="qb-btn" onclick="quickBet('MIN')">MIN</button>
                     <button class="qb-btn" onclick="quickBet('HALF')">1/2 POT</button>
@@ -388,7 +393,8 @@
 
     let prevBoardLength = 0;
     let prevBurnLength = 0;
-    let localLogVersion = -1; // 【修复】绝对版本号，防死锁
+    let localLogVersion = -1;
+    let localMucked = false; // 控制 Muck UI 本地变量
 
     // 【核心财务净化器】只留下干净的小数点（如 1 或 0.25）
     function formatMoney(val) { return parseFloat(Number(val).toFixed(2)); }
@@ -426,36 +432,21 @@
     }
 
     const slider = document.getElementById('raise-slider');
-    const raiseInput = document.getElementById('raise-input');
+    const displayAmount = document.getElementById('display-amount');
     const btnRaiseSub = document.getElementById('btn-raise-sub');
 
-    // 【极品联动1：拖动滑块，更新输入框】
-    function syncSliderToInput() {
+    function updateSliderDisplay() {
         let val = parseFloat(slider.value) || 0;
         let cleanVal = formatMoney(val);
-        raiseInput.value = cleanVal;
+        displayAmount.innerText = "$" + cleanVal;
         btnRaiseSub.innerText = "$" + cleanVal;
-        if(val >= parseFloat(slider.max)) { raiseInput.value = formatMoney(parseFloat(slider.max)); btnRaiseSub.innerText = "ALL-IN"; }
-    }
-
-    // 【极品联动2：手填输入框，纠错后更新滑块】
-    function syncInputToSlider() {
-        let val = parseFloat(raiseInput.value) || 0;
-        val = roundToQuarter(val); // 强制0.25归化
-        let min = parseFloat(slider.min) || 0;
-        let max = parseFloat(slider.max) || 0;
-        if (val < min) val = min;
-        if (val > max) val = max;
-        
-        slider.value = val; 
-        syncSliderToInput(); // 把纠错后的正确数字写回屏幕
+        if(val >= parseFloat(slider.max)) { displayAmount.innerText = "ALL-IN"; btnRaiseSub.innerText = "ALL-IN"; }
     }
 
     function quickBet(type) {
         if(!latestGameState || !latestGameState.game) return;
         const currentBet = latestGameState.game.currentBet || 0;
         const pot = latestGameState.game.pot || 0;
-        
         const minRaiseDelta = latestGameState.game.lastValidRaise || latestGameState.game.bigBlind || 5;
         const minRaiseTo = currentBet + minRaiseDelta;
         
@@ -465,17 +456,26 @@
         if (type === 'POT') target = currentBet + pot;
         if (type === 'ALLIN') target = parseFloat(slider.max);
         
-        target = roundToQuarter(target); // 智能四舍五入到 0.25
+        target = roundToQuarter(target);
         
         if (target < minRaiseTo) target = minRaiseTo;
         if (target > parseFloat(slider.max)) target = parseFloat(slider.max);
         
-        slider.value = target; syncSliderToInput();
+        slider.value = target; updateSliderDisplay();
+    }
+
+    // 【Muck / Show 交互控制】
+    function triggerMuckCards() {
+        localMucked = true; // 设为已默默收下
+        const uncontestedEl = document.getElementById('uncontested-action-container');
+        if (uncontestedEl) uncontestedEl.classList.add('hidden');
     }
 
     function triggerShowCards() {
         send({type:'SHOW_CARDS', name: myName});
-        document.getElementById('show-cards-container').classList.add('hidden'); // 点完藏起来
+        document.getElementById('show-cards-container').classList.add('hidden');
+        const uncontestedEl = document.getElementById('uncontested-action-container');
+        if (uncontestedEl) uncontestedEl.classList.add('hidden');
     }
 
     function checkAutoLogin() {
@@ -528,14 +528,14 @@
             document.getElementById('display-room-url').innerText = `ROOM CODE: ${currentRoomId}`;
             
             const buyInVal = parseFloat(document.getElementById('set-buyin').value) || 30;
-            const sb = parseFloat(document.getElementById('set-sb').value) || 2.5;
-            const timer = parseInt(document.getElementById('set-timer').value) || 0;
+            const sb = parseFloat(document.getElementById('set-sb').value) || 0.25;
             const botLevel = parseInt(document.getElementById('set-bot-level').value) || 1;
             const enableDraw = document.getElementById('set-enable-draw').checked;
+            const enableStandUp = document.getElementById('set-enable-standup').checked;
 
             creatorSettings = { 
                 initialChips: buyInVal, smallBlind: sb, bigBlind: sb * 2,
-                timer: timer, botLevel: botLevel, enableDraw: enableDraw
+                botLevel: botLevel, enableDraw: enableDraw, enableStandUp: enableStandUp
             };
 
             navTo('view-game'); document.getElementById('host-panel').classList.remove('hidden');
@@ -575,7 +575,7 @@
     function renderEngine(state) {
         if (!state || !state.game) return;
 
-        // 【核心修复4：绝对版本号防死锁】
+        // 【日志绝对防卡死版】
         if (state.game.logVersion !== localLogVersion) {
             const contentBox = document.getElementById('log-content');
             contentBox.innerHTML = state.game.logs.map(log => `<div class="log-item">${log}</div>`).join('');
@@ -642,6 +642,7 @@
 
         const banner = document.getElementById("winner-banner");
         const showCardsBtn = document.getElementById("show-cards-container");
+        const uncontestedBtn = document.getElementById("uncontested-action-container");
 
         if (state.game.status === "SHOWDOWN") {
             const hasBankrupt = playersArray.some(p => !p.isKicked && p.seatIndex !== -1 && (p.chips === 0 || p.isOut) && !p.isSpectating);
@@ -676,7 +677,16 @@
             }
             banner.classList.remove("hidden");
 
-            // 【核心修复2：给弃牌玩家分配装X专属权限】
+            let isUncontested = !!state.game.uncontestedWinner;
+            
+            // 【神级交互：躺赢者的双选权利】
+            if (isUncontested && amISeated && myDataRecord.name === state.game.uncontestedWinner && !myDataRecord.hasShownCards) {
+                if (!localMucked) uncontestedBtn.classList.remove("hidden");
+            } else {
+                uncontestedBtn.classList.add("hidden");
+            }
+
+            // 【神级交互：弃牌玩家的装X亮牌】
             if (amISeated && myDataRecord.folded && !myDataRecord.hasShownCards) {
                 showCardsBtn.classList.remove("hidden");
             } else {
@@ -684,9 +694,11 @@
             }
 
         } else {
+            localMucked = false; // 新局重置状态
             if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
             banner.classList.add("hidden");
             showCardsBtn.classList.add("hidden");
+            uncontestedBtn.classList.add("hidden");
         }
 
         const inviteContainer = document.getElementById("invite-pill-container");
@@ -799,7 +811,7 @@
                 const isOffline = p.isOnline === false; 
                 const isSpectating = p.isSpectating === true;
                 
-                // 【实体位置计算】
+                // 实体位置计算
                 const isDealer = (p.seatIndex === state.game.dealerIndex && state.game.status !== "WAITING" && !isSpectating);
                 const isSB = (p.seatIndex === state.game.sbIndex && state.game.status !== "WAITING" && !isSpectating);
                 const isBB = (p.seatIndex === state.game.bbIndex && state.game.status !== "WAITING" && !isSpectating);
@@ -807,13 +819,22 @@
                 let displayAvatar = '😎'; let displayName = p.name;
                 if (p.name.includes('|')) { const parts = p.name.split('|'); displayAvatar = parts[0]; displayName = parts[1]; }
 
-                // 【核心修复1：Fold牌暗淡留底】只有自己能看到自己丢掉的牌
+                // 【核心：Fold牌暗淡留底 & 物理实况亮牌引擎】
                 const isMyFoldedCards = (p.folded && p.name === myName);
+                const isShowdown = state.game.status === "SHOWDOWN";
+                const isUncontested = !!state.game.uncontestedWinner;
+                
+                // 默认藏牌逻辑
+                let isGlobalHidden = true;
+                if (p.name === myName) isGlobalHidden = false; // 自己永远可见自己的
+                if (isShowdown && !isUncontested && !p.folded) isGlobalHidden = false; // 正常决胜摊牌
+                if (p.hasShownCards) isGlobalHidden = false; // 玩家主动点击亮牌！
 
                 let cardsHtml = "";
-                if (p.hand && p.hand.length > 0 && !isSpectating && (!p.folded || isMyFoldedCards)) {
+                // 只要不是观战，且(没弃牌 OR 是自己的弃牌 OR 已经霸气亮牌)，就在桌面渲染牌！
+                if (p.hand && p.hand.length > 0 && !isSpectating && (!p.folded || isMyFoldedCards || p.hasShownCards)) {
                     cardsHtml = p.hand.map((c, idx) => {
-                        const isHidden = (p.name !== myName && state.game.status !== "SHOWDOWN") || c === "??";
+                        const isHidden = isGlobalHidden || c === "??";
                         const isRed = !isHidden && (c.includes('♥') || c.includes('♦'));
                         
                         let animDelay = "";
@@ -826,9 +847,10 @@
                             }
                         }
                         
-                        // 【核心修复3：强加 HandID，保证发牌引擎每把强制重启重画】
+                        // 【强制动画刷新 Key】
                         const handKeyClass = `hand-${state.game.handCount}`;
-                        const foldStyle = isMyFoldedCards ? `filter: grayscale(1) brightness(0.4); opacity: 0.6;` : ``;
+                        // Fold的牌变暗，除非他主动亮出了给全场看（此时恢复高亮）
+                        const foldStyle = (isMyFoldedCards && !p.hasShownCards) ? `filter: grayscale(1) brightness(0.4); opacity: 0.6;` : ``;
 
                         return `<div class="playing-card ${isHidden?'back':''} ${isRed?'red':''} card-${idx+1} ${handKeyClass}" style="${animDelay} ${foldStyle}">${isHidden?'':c}</div>`;
                     }).join("");
@@ -852,9 +874,11 @@
                         
                         <div class="dealer-badges">
                             ${isDealer ? `<div class="dealer-btn">D</div>` : ''}
-                            ${isSB ? `<div class="dealer-btn badge-sb">SB</div>` : ''}
-                            ${isBB ? `<div class="dealer-btn badge-bb">BB</div>` : ''}
+                            ${isSB ? `<div class="dealer-btn badge-s">S</div>` : ''}
+                            ${isBB ? `<div class="dealer-btn badge-b">B</div>` : ''}
                         </div>
+
+                        ${(state.game.enableStandUp && !isOut && !isSpectating) ? `<div class="${p.isStanding ? 'stand-indicator' : 'sit-indicator'}">${p.isStanding ? '🧍 站立' : '🪑 上岸'}</div>` : ''}
 
                         <div class="player-card ${isActive && !p.folded && !isOut && !isSpectating ? 'active' : ''} ${isOut || isSpectating ? 'out-state' : ''}" style="${(p.folded && !isOut) ? 'opacity: 0.6;' : ''}">
                             ${kickHtml}
@@ -911,16 +935,15 @@
                     const minRaiseTo = currentBet + minRaiseDelta; 
                     slider.min = minRaiseTo; slider.max = myChips + myBet; 
                     
-                    // 新的 0.25 强绑定机制：初始化确保对齐步长
                     let targetVal = parseFloat(slider.value) || 0;
                     if (targetVal < minRaiseTo || targetVal > parseFloat(slider.max)) targetVal = minRaiseTo; 
                     slider.value = roundToQuarter(targetVal);
-                    syncSliderToInput();
+                    updateSliderDisplay();
                     
                     document.getElementById("btn-action-fold").onclick = () => send({type:'ACTION', name: myName, action:'FOLD'});
                     document.getElementById("btn-action-call").onclick = () => send({type:'ACTION', name: myName, action:'CALL'});
                     document.getElementById("btn-action-raise").onclick = () => { 
-                        const raiseTo = parseFloat(raiseInput.value); 
+                        const raiseTo = parseFloat(slider.value); 
                         const extraAmount = Math.round((raiseTo - currentBet) * 100) / 100; 
                         send({type:'ACTION', name: myName, action:'RAISE', amount: extraAmount}); 
                     };

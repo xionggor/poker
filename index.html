@@ -110,21 +110,16 @@
         .add-bot-btn.pulse-gold { color: var(--gold); animation: pulseGold 1.5s infinite; background: rgba(255, 215, 0, 0.2); }
         @keyframes pulseGold { 0% { box-shadow: 0 0 0 0 rgba(255,215,0,0.7); } 70% { box-shadow: 0 0 0 15px rgba(255,215,0,0); } 100% { box-shadow: 0 0 0 0 rgba(255,215,0,0); } }
 
-        /* 【新视觉：单字母极简盲注徽章】 */
-        .dealer-badges { position: absolute; display: flex; gap: 4px; z-index: 20; align-items: center; justify-content: center; }
+        /* 【视觉重构 1：徽章合并与居中 & 紫色小盲】 */
+        .dealer-badges { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; z-index: 20; align-items: center; justify-content: center; }
         .dealer-btn { width: 22px; height: 22px; background: white; color: black; border: 2px solid #555; border-radius: 50%; font-weight: 900; font-size: 11px; display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 6px rgba(0,0,0,0.6); }
-        .badge-s { background: #349feb; color: white; border-color: #1976d2;}
+        .badge-s { background: #9b59b6; color: white; border-color: #8e44ad;} /* 醒目紫色 */
         .badge-b { background: #f39c12; color: black; border-color: #d68910;}
-        .pos-bottom .dealer-badges { top: -15px; right: -30px; }
-        .pos-top .dealer-badges { bottom: -15px; right: -30px; }
-        .pos-left .dealer-badges { top: -15px; right: -45px; }
-        .pos-right .dealer-badges { top: -15px; left: -45px; flex-direction: row-reverse; }
+        
+        .stand-indicator { position: absolute; top: -10px; left: -10px; background: #e74c3c; color: white; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 4px; z-index: 25; box-shadow: 0 2px 5px rgba(0,0,0,0.5); border: 1px solid #ff5b4c; }
+        .sit-indicator { position: absolute; top: -10px; left: -10px; background: #2ecc71; color: black; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 4px; z-index: 25; box-shadow: 0 2px 5px rgba(0,0,0,0.5); border: 1px solid #219653; }
 
-        /* 【新视觉：站立游戏生存标志】 */
-        .stand-indicator { position: absolute; top: -10px; left: 0; background: #e74c3c; color: white; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 4px; z-index: 25; box-shadow: 0 2px 5px rgba(0,0,0,0.5); border: 1px solid #ff5b4c; }
-        .sit-indicator { position: absolute; top: -10px; left: 0; background: #2ecc71; color: black; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 4px; z-index: 25; box-shadow: 0 2px 5px rgba(0,0,0,0.5); border: 1px solid #219653; }
-
-        .player-avatar { padding-top: 8px; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2;}
+        .player-avatar { padding-top: 14px; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2;} /* 稍微加点顶距给徽章留空间 */
         .player-avatar span { font-size: 26px; line-height: 1; }
         .player-name { font-size: 11px; color: #ddd; margin-top: auto; padding-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; text-align: center; z-index: 2;}
         .player-chips { background: #4b5d6d; text-align: center; font-size: 13px; font-weight: bold; padding: 5px 0; border-bottom-left-radius: 6px; border-bottom-right-radius: 6px; z-index: 2;}
@@ -142,15 +137,19 @@
         .hole-cards { position: absolute; display: flex; z-index: 5; }
         .card-1 { margin-right: -10px; z-index: 1; } .card-2 { z-index: 2; }
         
+        /* 【视觉重构 2：内圈筹码环，彻底避开手牌】 */
         .bet-badge { position: absolute; background: rgba(0,0,0,0.85); padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold; border: 1px solid #777; z-index: 15; white-space: nowrap; color: var(--gold); box-shadow: 0 4px 10px rgba(0,0,0,0.5);}
         .pos-bottom .hole-cards { top: -45px; left: 50%; transform: translateX(-50%); } 
-        .pos-bottom .bet-badge { top: -35px; right: -40px; } 
+        .pos-bottom .bet-badge { top: -85px; left: 50%; transform: translateX(-50%); } /* 越过手牌向上推 */
+        
         .pos-top .hole-cards { bottom: -45px; left: 50%; transform: translateX(-50%); }
-        .pos-top .bet-badge { bottom: -35px; right: -40px; }
+        .pos-top .bet-badge { bottom: -85px; left: 50%; transform: translateX(-50%); } /* 越过手牌向下推 */
+        
         .pos-left .hole-cards { top: -45px; left: 50%; transform: translateX(-50%); }
-        .pos-left .bet-badge { top: 50%; left: 100%; margin-left: 15px; transform: translateY(-50%); } 
+        .pos-left .bet-badge { top: -20px; left: 80px; transform: none; } /* 往蓝色桌布内圈深推 */
+        
         .pos-right .hole-cards { top: -45px; left: 50%; transform: translateX(-50%); }
-        .pos-right .bet-badge { top: 50%; right: 100%; margin-right: 15px; transform: translateY(-50%); } 
+        .pos-right .bet-badge { top: -20px; right: 80px; transform: none; } /* 往蓝色桌布内圈深推 */
 
         .s-btm-c { top: 102%; left: 50%; } .s-lft-b { top: 75%; left: 6%; } .s-lft-t { top: 25%; left: 6%; } .s-top-l { top: -2%; left: 22%; } .s-top-c { top: -2%; left: 50%; }
         .s-top-r { top: -2%; left: 78%; } .s-rgt-t { top: 25%; left: 94%; } .s-rgt-b { top: 75%; left: 94%; } .s-btm-r { top: 102%; left: 78%; } .s-btm-l { top: 102%; left: 22%; }
@@ -170,10 +169,8 @@
         .raise-control-area { display: flex; flex-direction: column; gap: 12px; background: #1a2028; padding: 15px; border-radius: 12px; border: 1px solid #2a3441; }
         .raise-header { display: flex; justify-content: space-between; align-items: center; font-size: 14px; color: #8ca0b3; font-weight: bold; }
         
-        /* 还原：去除输入框，恢复数字显示 */
         .raise-amount-display { font-size: 24px; color: var(--gold); font-weight: 900; letter-spacing: 1px; }
         
-        /* 强制 0.25 步长的滑动条 */
         .custom-slider { -webkit-appearance: none; width: 100%; height: 6px; border-radius: 3px; background: #333; outline: none; margin: 10px 0; }
         .custom-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 24px; height: 24px; border-radius: 50%; background: var(--gold); cursor: pointer; box-shadow: 0 0 10px rgba(255, 215, 0, 0.5); border: 3px solid #11151a; }
         .quick-bet-row { display: flex; justify-content: space-between; gap: 8px; }
@@ -394,11 +391,9 @@
     let prevBoardLength = 0;
     let prevBurnLength = 0;
     let localLogVersion = -1;
-    let localMucked = false; // 控制 Muck UI 本地变量
+    let localMucked = false; 
 
-    // 【核心财务净化器】只留下干净的小数点（如 1 或 0.25）
     function formatMoney(val) { return parseFloat(Number(val).toFixed(2)); }
-    // 【线下级步长引擎】强制 0.25 的倍数
     function roundToQuarter(val) { return Math.round(val * 4) / 4; }
 
     function openLedger() { document.getElementById('ledger-modal').classList.remove('hidden'); document.getElementById('settlement-area').style.display = 'none'; }
@@ -464,9 +459,8 @@
         slider.value = target; updateSliderDisplay();
     }
 
-    // 【Muck / Show 交互控制】
     function triggerMuckCards() {
-        localMucked = true; // 设为已默默收下
+        localMucked = true; 
         const uncontestedEl = document.getElementById('uncontested-action-container');
         if (uncontestedEl) uncontestedEl.classList.add('hidden');
     }
@@ -575,7 +569,6 @@
     function renderEngine(state) {
         if (!state || !state.game) return;
 
-        // 【日志绝对防卡死版】
         if (state.game.logVersion !== localLogVersion) {
             const contentBox = document.getElementById('log-content');
             contentBox.innerHTML = state.game.logs.map(log => `<div class="log-item">${log}</div>`).join('');
@@ -679,14 +672,12 @@
 
             let isUncontested = !!state.game.uncontestedWinner;
             
-            // 【神级交互：躺赢者的双选权利】
             if (isUncontested && amISeated && myDataRecord.name === state.game.uncontestedWinner && !myDataRecord.hasShownCards) {
                 if (!localMucked) uncontestedBtn.classList.remove("hidden");
             } else {
                 uncontestedBtn.classList.add("hidden");
             }
 
-            // 【神级交互：弃牌玩家的装X亮牌】
             if (amISeated && myDataRecord.folded && !myDataRecord.hasShownCards) {
                 showCardsBtn.classList.remove("hidden");
             } else {
@@ -694,7 +685,7 @@
             }
 
         } else {
-            localMucked = false; // 新局重置状态
+            localMucked = false; 
             if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
             banner.classList.add("hidden");
             showCardsBtn.classList.add("hidden");
@@ -811,7 +802,6 @@
                 const isOffline = p.isOnline === false; 
                 const isSpectating = p.isSpectating === true;
                 
-                // 实体位置计算
                 const isDealer = (p.seatIndex === state.game.dealerIndex && state.game.status !== "WAITING" && !isSpectating);
                 const isSB = (p.seatIndex === state.game.sbIndex && state.game.status !== "WAITING" && !isSpectating);
                 const isBB = (p.seatIndex === state.game.bbIndex && state.game.status !== "WAITING" && !isSpectating);
@@ -819,19 +809,16 @@
                 let displayAvatar = '😎'; let displayName = p.name;
                 if (p.name.includes('|')) { const parts = p.name.split('|'); displayAvatar = parts[0]; displayName = parts[1]; }
 
-                // 【核心：Fold牌暗淡留底 & 物理实况亮牌引擎】
                 const isMyFoldedCards = (p.folded && p.name === myName);
                 const isShowdown = state.game.status === "SHOWDOWN";
                 const isUncontested = !!state.game.uncontestedWinner;
                 
-                // 默认藏牌逻辑
                 let isGlobalHidden = true;
-                if (p.name === myName) isGlobalHidden = false; // 自己永远可见自己的
-                if (isShowdown && !isUncontested && !p.folded) isGlobalHidden = false; // 正常决胜摊牌
-                if (p.hasShownCards) isGlobalHidden = false; // 玩家主动点击亮牌！
+                if (p.name === myName) isGlobalHidden = false; 
+                if (isShowdown && !isUncontested && !p.folded) isGlobalHidden = false; 
+                if (p.hasShownCards) isGlobalHidden = false; 
 
                 let cardsHtml = "";
-                // 只要不是观战，且(没弃牌 OR 是自己的弃牌 OR 已经霸气亮牌)，就在桌面渲染牌！
                 if (p.hand && p.hand.length > 0 && !isSpectating && (!p.folded || isMyFoldedCards || p.hasShownCards)) {
                     cardsHtml = p.hand.map((c, idx) => {
                         const isHidden = isGlobalHidden || c === "??";
@@ -847,9 +834,7 @@
                             }
                         }
                         
-                        // 【强制动画刷新 Key】
                         const handKeyClass = `hand-${state.game.handCount}`;
-                        // Fold的牌变暗，除非他主动亮出了给全场看（此时恢复高亮）
                         const foldStyle = (isMyFoldedCards && !p.hasShownCards) ? `filter: grayscale(1) brightness(0.4); opacity: 0.6;` : ``;
 
                         return `<div class="playing-card ${isHidden?'back':''} ${isRed?'red':''} card-${idx+1} ${handKeyClass}" style="${animDelay} ${foldStyle}">${isHidden?'':c}</div>`;
@@ -866,21 +851,25 @@
                 let kickHtml = '';
                 if (isHost && p.name !== myName) { kickHtml = `<button class="kick-btn" onclick="send({type:'KICK', name: '${myName}', targetName:'${p.name}'})">踢出玩家</button>`; }
 
+                // 【视觉重构组装区：徽章已经移入了 player-card 内部】
+                let badgesHtml = `
+                    <div class="dealer-badges">
+                        ${isDealer ? `<div class="dealer-btn">D</div>` : ''}
+                        ${isSB ? `<div class="dealer-btn badge-s">S</div>` : ''}
+                        ${isBB ? `<div class="dealer-btn badge-b">B</div>` : ''}
+                    </div>
+                `;
+
                 layer.innerHTML += `
                     <div class="player-seat ${seatClass} ${posClass}">
                         ${(p.winAmount > 0 && state.game.status === "SHOWDOWN") ? `<div class="win-fly-text">+$${formatMoney(p.winAmount)}</div>` : ''}
                         
                         <div class="hole-cards">${isOut || isSpectating ? '' : cardsHtml}</div>
                         
-                        <div class="dealer-badges">
-                            ${isDealer ? `<div class="dealer-btn">D</div>` : ''}
-                            ${isSB ? `<div class="dealer-btn badge-s">S</div>` : ''}
-                            ${isBB ? `<div class="dealer-btn badge-b">B</div>` : ''}
-                        </div>
-
                         ${(state.game.enableStandUp && !isOut && !isSpectating) ? `<div class="${p.isStanding ? 'stand-indicator' : 'sit-indicator'}">${p.isStanding ? '🧍 站立' : '🪑 上岸'}</div>` : ''}
 
                         <div class="player-card ${isActive && !p.folded && !isOut && !isSpectating ? 'active' : ''} ${isOut || isSpectating ? 'out-state' : ''}" style="${(p.folded && !isOut) ? 'opacity: 0.6;' : ''}">
+                            ${badgesHtml}
                             ${kickHtml}
                             <div class="player-avatar"><span>${displayAvatar}</span></div>
                             <div style="min-height:22px;">${badgeHtml}</div>

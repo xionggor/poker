@@ -62,7 +62,6 @@
         .lobby-item { font-size: 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
         .lobby-item span { font-size: 20px; }
 
-        /* 【纯净聊天终端 HUD】 */
         #chat-zone { position:absolute; bottom:20px; left:20px; width:280px; background:rgba(17, 21, 26, 0.85); border:1px solid #333; border-radius:12px; display:flex; flex-direction:column; z-index:95; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
         #chat-list { height:150px; overflow-y:auto; padding:12px; font-size:13px; color:#ddd; display:flex; flex-direction:column; gap:8px; scroll-behavior: smooth;}
         #chat-list div { background: rgba(0,0,0,0.3); padding: 6px 10px; border-radius: 8px; word-wrap: break-word;}
@@ -159,17 +158,13 @@
         
         .bet-badge { position: absolute; background: rgba(0,0,0,0.85); padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold; border: 1px solid #777; z-index: 15; white-space: nowrap; color: var(--gold); box-shadow: 0 4px 10px rgba(0,0,0,0.5);}
         
-        /* 默认方位布局 */
         .pos-bottom .hole-cards { top: -45px; left: 50%; transform: translateX(-50%); } 
         .pos-bottom .bet-badge { top: -85px; left: 50%; transform: translateX(-50%); } 
         .pos-top .hole-cards { bottom: -45px; left: 50%; transform: translateX(-50%); }
         .pos-top .bet-badge { bottom: -85px; left: 50%; transform: translateX(-50%); } 
         
-        /* 【V36 绝杀修复：左右特殊座位的 Z轴与 XY轴 精准避让】 */
         .s-lft-t .hole-cards, .s-lft-b .hole-cards, .s-rgt-t .hole-cards, .s-rgt-b .hole-cards { top: -45px; left: 50%; transform: translateX(-50%); }
-        /* 左下、右下：筹码放在手牌正上方 */
         .s-lft-b .bet-badge, .s-rgt-b .bet-badge { top: -80px !important; left: 50% !important; transform: translateX(-50%) !important; right: auto !important; }
-        /* 左上、右上：筹码放在卡片侧下方，彻底避开底层文字 */
         .s-lft-t .bet-badge { top: 40px !important; left: -60px !important; transform: none !important; right: auto !important; }
         .s-rgt-t .bet-badge { top: 40px !important; right: -60px !important; transform: none !important; left: auto !important; }
 
@@ -215,6 +210,10 @@
     </style>
 </head>
 <body>
+
+    <div id="disconnect-banner" class="hidden" style="position:absolute; top:0; left:0; width:100%; background:#e74c3c; color:white; text-align:center; padding:10px; z-index:9999; font-weight:bold; font-size: 14px; box-shadow: 0 4px 10px rgba(0,0,0,0.5);">
+        🔌 失去与云端的连接，正在尝试重连...
+    </div>
 
     <div id="view-home" class="view-screen">
         <div class="menu-card">
@@ -439,12 +438,17 @@
     let latestGameState = null;
     let countdownInterval = null; 
     let creatorSettings = null; 
+    let heartbeatInterval = null; // 【新增：心跳探测器】
 
     let prevBoardLength = 0;
     let prevBurnLength = 0;
     let localLogVersion = -1;
     let localChatLength = 0;
     let localMucked = false; 
+
+    let localHandCount = -1;
+    let initialDealPlayed = false;
+    let winTextPlayed = false;
 
     function formatMoney(val) { return parseFloat(Number(val).toFixed(2)); }
     function roundToQuarter(val) { return Math.round(val * 4) / 4; }
@@ -545,9 +549,10 @@
         }
     };
 
-    // 【新增发送聊天事件绑定】
+    // 【新增：回车防拦截与消息发送】
     document.getElementById('chat-input').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
+            e.preventDefault(); // 强力锁死回车默认刷新行为
             const val = this.value.trim();
             if (val && myName) {
                 send({ type: 'CHAT', name: myName, msg: val });
@@ -637,24 +642,54 @@
         }
     }
 
+    // 【新增：防断线心跳引擎与重连 HUD】
     function connectWebSocket() {
         const wsUrl = BACKEND_URL.replace("https://", "wss://") + `?roomId=${currentRoomId}`;
         ws = new WebSocket(wsUrl); 
+        
         ws.onopen = () => {
+            document.getElementById('disconnect-banner').classList.add('hidden');
             ws.send(JSON.stringify({ type: "PING" }));
             if (myName !== "") {
                 let joinMsg = { type: "JOIN", name: myName };
                 if (creatorSettings) { joinMsg.settings = creatorSettings; creatorSettings = null; }
                 ws.send(JSON.stringify(joinMsg));
             }
+            
+            // 启动心跳引擎，每 25 秒探测一次，击碎 60 秒断线魔咒
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+            heartbeatInterval = setInterval(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: "PING" }));
+                }
+            }, 25000);
         };
-        ws.onmessage = (e) => { try { latestGameState = JSON.parse(e.data); renderEngine(latestGameState); } catch (err) {} };
+        
+        ws.onmessage = (e) => { 
+            try { latestGameState = JSON.parse(e.data); renderEngine(latestGameState); } catch (err) {} 
+        };
+
+        ws.onclose = () => {
+            document.getElementById('disconnect-banner').classList.remove('hidden');
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+            setTimeout(connectWebSocket, 3000); // 自动尝试重连
+        };
+
+        ws.onerror = () => {
+            document.getElementById('disconnect-banner').classList.remove('hidden');
+        };
     }
 
     function send(obj) { if(ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); else console.log("等待重连..."); }
 
     function renderEngine(state) {
         if (!state || !state.game) return;
+
+        if (state.game.handCount !== localHandCount) {
+            localHandCount = state.game.handCount;
+            initialDealPlayed = false;
+            winTextPlayed = false;
+        }
 
         if (state.game.logVersion !== localLogVersion) {
             const contentBox = document.getElementById('log-content');
@@ -663,7 +698,6 @@
             localLogVersion = state.game.logVersion;
         }
 
-        // 【全新分离：仅渲染聊天图层】
         if (state.game.chatLogs && state.game.chatLogs.length !== localChatLength) {
             const chatList = document.getElementById('chat-list');
             chatList.innerHTML = state.game.chatLogs.map(c => `<div><strong style="color:#349feb">${c.sender}:</strong> ${c.msg}</div>`).join('');
@@ -671,7 +705,6 @@
             localChatLength = state.game.chatLogs.length;
         }
 
-        // 在玩家坐下/观战时显示聊天频道
         if (myName !== "") {
             document.getElementById('chat-zone').classList.remove('hidden');
         }
@@ -878,7 +911,8 @@
         const layer = document.getElementById("players-layer"); layer.innerHTML = "";
         let isMyTurn = false;
 
-        const isInitialDeal = state.game.status === 'PRE-FLOP' && !playersArray.some(p => p.actedThisRound);
+        const isInitialDeal = state.game.status === 'PRE-FLOP' && !playersArray.some(p => p.actedThisRound) && !initialDealPlayed;
+        
         let playingSeatsOrder = [];
         if (isInitialDeal) {
             for (let i = 0; i < 10; i++) {
@@ -967,9 +1001,14 @@
                     </div>
                 `;
 
+                let winFlyTextHtml = '';
+                if (p.winAmount > 0 && state.game.status === "SHOWDOWN" && !winTextPlayed) {
+                    winFlyTextHtml = `<div class="win-fly-text">+$${formatMoney(p.winAmount)}</div>`;
+                }
+
                 layer.innerHTML += `
                     <div class="player-seat ${seatClass} ${posClass}">
-                        ${(p.winAmount > 0 && state.game.status === "SHOWDOWN") ? `<div class="win-fly-text">+$${formatMoney(p.winAmount)}</div>` : ''}
+                        ${winFlyTextHtml}
                         
                         <div class="hole-cards">${isOut || isSpectating ? '' : cardsHtml}</div>
 
@@ -995,6 +1034,9 @@
                 layer.innerHTML += `<div class="player-seat ${seatClass} ${posClass}"><div class="player-card empty-seat">${addBotHtml}</div></div>`; 
             }
         }
+
+        if (isInitialDeal) initialDealPlayed = true;
+        if (state.game.status === "SHOWDOWN") winTextPlayed = true;
 
         const actionConsole = document.getElementById("action-console"); 
         const buyinConsole = document.getElementById("buyin-console");

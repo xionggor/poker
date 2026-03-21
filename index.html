@@ -100,15 +100,27 @@
         .kick-btn:hover { background: #ff5b4c; transform: translateX(-50%) scale(1.05);}
         .player-seat:hover .kick-btn { display: block; }
 
-        /* 【究极视觉 1：鱿鱼变色引擎 (黑 vs 粉红)】 */
-        .player-card { width: 110px; min-height: 85px; background: #000; border-radius: 8px; overflow: visible; border: 2px solid transparent; box-shadow: 0 4px 10px rgba(0,0,0,0.5); z-index: 10; position: relative; display: flex; flex-direction: column; justify-content: space-between; transition: 0.3s;}
-        .player-card.active { border-color: var(--active-green); box-shadow: 0 0 15px rgba(46, 204, 113, 0.5);}
-        .player-card.active .player-chips { background: var(--active-green); color: #000; }
+        /* 【究极视觉：鱿鱼粉黑流 & 高亮实线霓虹边框】 */
+        .player-card { 
+            width: 110px; min-height: 85px; background: #000; border-radius: 8px; overflow: visible; 
+            border: 3px solid transparent; /* 预留 3px 边框空间防跳动 */
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5); z-index: 10; position: relative; display: flex; flex-direction: column; justify-content: space-between; transition: 0.3s;
+        }
+        .player-card.active { 
+            border-color: #2ecc71 !important; /* 实心绿边 */
+            animation: neonPulse 1.5s infinite alternate; /* 呼吸动画 */
+        }
+        .player-card.active .player-chips { background: #2ecc71 !important; color: #000 !important; }
         
-        .squid-stand { background: #111 !important; border: 1px solid #333 !important; }
-        .squid-sit { background: linear-gradient(145deg, #e83e8c, #d81b60) !important; border: 1px solid #ff80ab !important; box-shadow: 0 0 15px rgba(216, 27, 96, 0.5) !important; }
-        .squid-sit .player-chips { background: rgba(0,0,0,0.4) !important; }
-        .squid-sit .player-name { color: #fff; text-shadow: 0 1px 2px black;}
+        @keyframes neonPulse {
+            0% { box-shadow: 0 0 5px rgba(46, 204, 113, 0.4), inset 0 0 2px rgba(46, 204, 113, 0.2); }
+            100% { box-shadow: 0 0 25px rgba(46, 204, 113, 1), inset 0 0 10px rgba(46, 204, 113, 0.5); }
+        }
+
+        .squid-stand { background: #000 !important; border-color: transparent; }
+        .squid-sit { background: linear-gradient(145deg, #e83e8c, #d81b60) !important; border-color: #ff80ab !important; box-shadow: 0 0 15px rgba(216, 27, 96, 0.5) !important; }
+        .squid-sit .player-chips { background: rgba(0,0,0,0.4) !important; color: #fff !important;}
+        .squid-sit .player-name { color: #fff !important; text-shadow: 0 1px 2px black;}
 
         .player-card.empty-seat { background: rgba(0, 0, 0, 0.4); border: 2px solid rgba(255, 255, 255, 0.05); box-shadow: none; min-height: 85px; border-radius: 8px; position: relative; }
         .add-bot-btn { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 40px; color: rgba(255, 255, 255, 0.15); cursor: pointer; transition: 0.2s; font-weight: 100; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; border-radius: 8px; user-select: none;}
@@ -241,6 +253,25 @@
         </div>
     </div>
 
+    <div id="update-settings-modal" class="view-screen hidden" style="background: rgba(0,0,0,0.85); z-index: 500;">
+        <div class="menu-card" style="width: 320px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h2 style="color:var(--gold); margin:0;">实时修改规则</h2>
+                <span style="font-size:24px; cursor:pointer; color:#8ca0b3;" onclick="document.getElementById('update-settings-modal').classList.add('hidden')">&times;</span>
+            </div>
+            <div class="setting-item" style="margin-top:20px;">
+                <span class="setting-label" style="color:#e74c3c;">🦑 鱿鱼生存模式</span>
+                <input type="checkbox" id="update-enable-standup" style="width:20px; height:20px; cursor:pointer;">
+            </div>
+            <div class="setting-item">
+                <span class="setting-label" style="color:#e74c3c;">🧨 2-7 炸鱼赏金</span>
+                <input type="checkbox" id="update-enable-twoseven" style="width:20px; height:20px; cursor:pointer;">
+            </div>
+            <div style="font-size:12px; color:#aaa; margin-bottom:20px; text-align:left;">* 提示：规则修改将在【下一局】正式生效，不影响当前牌局。</div>
+            <button class="btn-main btn-gold" onclick="submitUpdateSettings()">保存并广播</button>
+        </div>
+    </div>
+
     <div id="sit-modal" class="view-screen hidden" style="background: rgba(0,0,0,0.85); z-index: 200;">
         <div class="menu-card" style="width: 320px;">
             <h2 style="color:var(--gold); margin-top:0; margin-bottom: 20px;">Take a Seat</h2>
@@ -309,7 +340,8 @@
         <div class="host-panel hidden" id="host-panel">
             <div style="margin-bottom: 5px; opacity: 0.8; font-weight:bold; color:var(--gold);">👑 房主控制台</div>
             <div style="margin-bottom: 10px; opacity: 0.6;">标准底金 $<span id="info-buyin">0</span> | 盲注 <span id="info-blinds">0/0</span></div>
-            <button onclick="triggerStartGame()" id="btn-start" class="host-btn btn-green">▶ 开始新一局</button>
+            <button onclick="openUpdateSettings()" class="host-btn" style="background:#f39c12; color:black; margin-bottom:10px;">⚙️ 实时修改规则</button>
+            <button onclick="triggerStartGame()" id="btn-start" class="host-btn btn-green" style="margin-top:0;">▶ 开始新一局</button>
             <button onclick="forceRestart()" id="btn-force-restart" class="host-btn btn-red">🛑 强制重开局</button>
         </div>
 
@@ -396,7 +428,7 @@
     let prevBoardLength = 0;
     let prevBurnLength = 0;
     let localLogVersion = -1;
-    let localMucked = false; // Mucker's Privilege 控制
+    let localMucked = false; 
 
     function formatMoney(val) { return parseFloat(Number(val).toFixed(2)); }
     function roundToQuarter(val) { return Math.round(val * 4) / 4; }
@@ -465,10 +497,10 @@
     }
 
     function triggerMuckCards() {
-        localMucked = true; // 默默盖牌
+        localMucked = true; 
         const uncontestedEl = document.getElementById('uncontested-action-container');
         if (uncontestedEl) uncontestedEl.classList.add('hidden');
-        renderEngine(latestGameState); // 触发重绘，牌面直接翻过去
+        renderEngine(latestGameState); 
     }
 
     function triggerShowCards() {
@@ -520,6 +552,22 @@
         setTimeout(() => { if (isWaitingForServer) { alert("云端无响应。请换个名字重试！"); btn.innerText = "确定进入"; btn.disabled = false; isWaitingForServer = false; } }, 5000);
     }
 
+    // 【新增指令：弹出与提交更新设置面板】
+    function openUpdateSettings() {
+        if(latestGameState && latestGameState.game) {
+            document.getElementById('update-enable-standup').checked = latestGameState.game.enableStandUp;
+            document.getElementById('update-enable-twoseven').checked = latestGameState.game.enableTwoSeven;
+        }
+        document.getElementById('update-settings-modal').classList.remove('hidden');
+    }
+
+    function submitUpdateSettings() {
+        const standUp = document.getElementById('update-enable-standup').checked;
+        const twoSeven = document.getElementById('update-enable-twoseven').checked;
+        send({type: 'UPDATE_SETTINGS', name: myName, settings: { enableStandUp: standUp, enableTwoSeven: twoSeven }});
+        document.getElementById('update-settings-modal').classList.add('hidden');
+    }
+
     async function createRoomFlow() {
         try {
             const res = await fetch(`${BACKEND_URL}/create-room`, { method: "POST" });
@@ -542,7 +590,7 @@
 
             navTo('view-game'); document.getElementById('host-panel').classList.remove('hidden');
             openSitModal(); 
-            // 【核心修复：彻底消灭“假死报错弹窗”，赋予初始日志生命体征】
+            // 完美解决弹窗报错假死！
             renderEngine({ status: "WAITING", game: { pot: 0, status: "WAITING", board: [], logs: [], logVersion: 0 }, players: [] });
         } catch (e) { alert("无法连接 Cloudflare 服务器。"); }
     }
@@ -685,14 +733,12 @@
 
             let isUncontested = !!state.game.uncontestedWinner;
             
-            // 躺赢权双选判定
             if (isUncontested && amISeated && myDataRecord.name === state.game.uncontestedWinner && !myDataRecord.hasShownCards) {
                 if (!localMucked) uncontestedBtn.classList.remove("hidden");
             } else {
                 uncontestedBtn.classList.add("hidden");
             }
 
-            // 输家（或弃牌者）装X特权
             const canShow = amISeated && !myDataRecord.isWinner && !myDataRecord.hasShownCards && !localMucked;
             if (canShow) {
                 showCardsBtn.classList.remove("hidden");
@@ -825,12 +871,11 @@
                 let displayAvatar = '😎'; let displayName = p.name;
                 if (p.name.includes('|')) { const parts = p.name.split('|'); displayAvatar = parts[0]; displayName = parts[1]; }
 
-                // 【核心特权：Mucker's Privilege 输家盖牌】
                 const isMyFoldedCards = (p.folded && p.name === myName);
                 
-                let isGlobalHidden = true; // 默认所有牌对外保密
-                if (p.name === myName && !localMucked) isGlobalHidden = false; // 自己永远可见，除非你主动点了“默默收下(Muck)”
-                if (p.hasShownCards) isGlobalHidden = false; // 服务器强判的赢家，或者你自己点击了“亮出装X”的牌，全场可见
+                let isGlobalHidden = true; 
+                if (p.name === myName && !localMucked) isGlobalHidden = false; 
+                if (p.hasShownCards) isGlobalHidden = false; 
 
                 let cardsHtml = "";
                 if (p.hand && p.hand.length > 0 && !isSpectating && (!p.folded || isMyFoldedCards || p.hasShownCards)) {
@@ -865,7 +910,6 @@
                 let kickHtml = '';
                 if (isHost && p.name !== myName) { kickHtml = `<button class="kick-btn" onclick="send({type:'KICK', name: '${myName}', targetName:'${p.name}'})">踢出玩家</button>`; }
 
-                // 【视觉重构组装区：粉黑赛博鱿鱼流】
                 let squidClass = "";
                 if (state.game.enableStandUp && !isOut && !isSpectating) {
                     squidClass = p.isStanding ? "squid-stand" : "squid-sit";

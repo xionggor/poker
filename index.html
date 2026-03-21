@@ -100,15 +100,15 @@
         .kick-btn:hover { background: #ff5b4c; transform: translateX(-50%) scale(1.05);}
         .player-seat:hover .kick-btn { display: block; }
 
-        /* 【究极视觉：鱿鱼粉黑流 & 高亮实线霓虹边框】 */
+        /* 【究极呼吸框与粉黑变色】 */
         .player-card { 
             width: 110px; min-height: 85px; background: #000; border-radius: 8px; overflow: visible; 
-            border: 3px solid transparent; /* 预留 3px 边框空间防跳动 */
+            border: 3px solid transparent; 
             box-shadow: 0 4px 10px rgba(0,0,0,0.5); z-index: 10; position: relative; display: flex; flex-direction: column; justify-content: space-between; transition: 0.3s;
         }
         .player-card.active { 
-            border-color: #2ecc71 !important; /* 实心绿边 */
-            animation: neonPulse 1.5s infinite alternate; /* 呼吸动画 */
+            border-color: #2ecc71 !important; 
+            animation: neonPulse 1.5s infinite alternate; 
         }
         .player-card.active .player-chips { background: #2ecc71 !important; color: #000 !important; }
         
@@ -274,7 +274,7 @@
 
     <div id="sit-modal" class="view-screen hidden" style="background: rgba(0,0,0,0.85); z-index: 200;">
         <div class="menu-card" style="width: 320px;">
-            <h2 style="color:var(--gold); margin-top:0; margin-bottom: 20px;">Take a Seat</h2>
+            <h2 style="color:var(--gold); margin:0; margin-bottom: 20px;">Take a Seat</h2>
             <div style="text-align: left; font-size: 13px; color:#aaa; margin-bottom: 8px;">1. 选择头像</div>
             <div id="avatar-grid" style="display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-bottom: 25px; background: #1a2028; padding: 15px; border-radius: 12px; border: 1px solid #333;"></div>
             <div style="text-align: left; font-size: 13px; color:#aaa; margin-bottom: 8px;">2. 输入您的尊姓大名</div>
@@ -552,7 +552,7 @@
         setTimeout(() => { if (isWaitingForServer) { alert("云端无响应。请换个名字重试！"); btn.innerText = "确定进入"; btn.disabled = false; isWaitingForServer = false; } }, 5000);
     }
 
-    // 【新增指令：弹出与提交更新设置面板】
+    // 【弹窗功能：动态回显当前房间的最新规则】
     function openUpdateSettings() {
         if(latestGameState && latestGameState.game) {
             document.getElementById('update-enable-standup').checked = latestGameState.game.enableStandUp;
@@ -590,7 +590,7 @@
 
             navTo('view-game'); document.getElementById('host-panel').classList.remove('hidden');
             openSitModal(); 
-            // 完美解决弹窗报错假死！
+            // 完美解决弹窗假死！
             renderEngine({ status: "WAITING", game: { pot: 0, status: "WAITING", board: [], logs: [], logVersion: 0 }, players: [] });
         } catch (e) { alert("无法连接 Cloudflare 服务器。"); }
     }

@@ -116,8 +116,9 @@
             100% { box-shadow: 0 0 25px rgba(46, 204, 113, 1), inset 0 0 10px rgba(46, 204, 113, 0.5); }
         }
 
+        /* 【究极视觉：正红色代表上岸，纯黑代表水鬼】 */
         .squid-stand { background: #000 !important; border-color: transparent; }
-        .squid-sit { background: linear-gradient(145deg, #e83e8c, #d81b60) !important; border-color: #ff80ab !important; box-shadow: 0 0 15px rgba(216, 27, 96, 0.5) !important; }
+        .squid-sit { background: #e74c3c !important; border-color: #c0392b !important; box-shadow: 0 0 15px rgba(231, 76, 60, 0.6) !important; }
         .squid-sit .player-chips { background: rgba(0,0,0,0.4) !important; color: #fff !important;}
         .squid-sit .player-name { color: #fff !important; text-shadow: 0 1px 2px black;}
 
@@ -151,17 +152,22 @@
         .card-1 { margin-right: -10px; z-index: 1; } .card-2 { z-index: 2; }
         
         .bet-badge { position: absolute; background: rgba(0,0,0,0.85); padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold; border: 1px solid #777; z-index: 15; white-space: nowrap; color: var(--gold); box-shadow: 0 4px 10px rgba(0,0,0,0.5);}
+        
+        /* 默认方位布局 */
         .pos-bottom .hole-cards { top: -45px; left: 50%; transform: translateX(-50%); } 
         .pos-bottom .bet-badge { top: -85px; left: 50%; transform: translateX(-50%); } 
         
         .pos-top .hole-cards { bottom: -45px; left: 50%; transform: translateX(-50%); }
         .pos-top .bet-badge { bottom: -85px; left: 50%; transform: translateX(-50%); } 
         
-        .pos-left .hole-cards { top: -45px; left: 50%; transform: translateX(-50%); }
-        .pos-left .bet-badge { top: -20px; left: 80px; transform: none; } 
+        /* 【精准排版：左、右四个特殊座位的完美错位，不再遮挡手牌！】 */
+        .s-lft-t .hole-cards, .s-lft-b .hole-cards, .s-rgt-t .hole-cards, .s-rgt-b .hole-cards { top: -45px; left: 50%; transform: translateX(-50%); }
         
-        .pos-right .hole-cards { top: -45px; left: 50%; transform: translateX(-50%); }
-        .pos-right .bet-badge { top: -20px; right: 80px; transform: none; } 
+        /* 左上、右上：筹码放在人物黑色卡片正下方 */
+        .s-lft-t .bet-badge, .s-rgt-t .bet-badge { top: 95px !important; left: 50% !important; transform: translateX(-50%) !important; right: auto !important; }
+        
+        /* 左下、右下：筹码放在手牌正上方 */
+        .s-lft-b .bet-badge, .s-rgt-b .bet-badge { top: -80px !important; left: 50% !important; transform: translateX(-50%) !important; right: auto !important; }
 
         .s-btm-c { top: 102%; left: 50%; } .s-lft-b { top: 75%; left: 6%; } .s-lft-t { top: 25%; left: 6%; } .s-top-l { top: -2%; left: 22%; } .s-top-c { top: -2%; left: 50%; }
         .s-top-r { top: -2%; left: 78%; } .s-rgt-t { top: 25%; left: 94%; } .s-rgt-b { top: 75%; left: 94%; } .s-btm-r { top: 102%; left: 78%; } .s-btm-l { top: 102%; left: 22%; }
@@ -341,7 +347,9 @@
             <div style="margin-bottom: 10px; opacity: 0.6;">标准底金 $<span id="info-buyin">0</span> | 盲注 <span id="info-blinds">0/0</span></div>
             <button onclick="openUpdateSettings()" class="host-btn" style="background:#f39c12; color:black; margin-bottom:10px;">⚙️ 实时修改规则</button>
             <button onclick="triggerStartGame()" id="btn-start" class="host-btn btn-green" style="margin-top:0;">▶ 开始新一局</button>
-            <button onclick="forceRestart()" id="btn-force-restart" class="host-btn btn-red">🛑 强制重开局</button>
+            
+            <button onclick="pauseAndRefund()" id="btn-pause-refund" class="host-btn" style="background:#e67e22; color:black; margin-top:0px;">⏸️ 中止并退款</button>
+            <button onclick="forceRestart()" id="btn-force-restart" class="host-btn btn-red">🛑 强行清理桌面(不退款)</button>
         </div>
 
         <div id="waiting-tip" class="waiting-tip hidden" style="bottom: 30px;">等待对手行动...</div>
@@ -593,7 +601,11 @@
     }
 
     function triggerStartGame() { send({ type: 'START_GAME', name: myName }); }
-    function forceRestart() { if(confirm("确定要强制结束当前对局吗？桌面的所有牌和底池将会被清空！")) send({ type: 'FORCE_RESTART', name: myName }); }
+    function forceRestart() { if(confirm("【警告】强制清理将清空桌面底池和未结算筹码，如需平账退钱，请使用[暂停并退款]按钮。确认清理吗？")) send({ type: 'FORCE_RESTART', name: myName }); }
+    
+    // 【核心新增：一键中止退款】
+    function pauseAndRefund() { if(confirm("【安全中止】确定要中止当前对局，并全额退还本局所有盲注和下注到玩家余额吗？")) send({ type: 'PAUSE_REFUND', name: myName }); }
+    
     function confirmPlayerBuyIn() { send({ type: 'BUY_IN', name: myName }); document.getElementById('buyin-console').classList.add('hidden'); }
 
     function joinByCode() {
@@ -807,9 +819,11 @@
                 if (state.game.status !== "WAITING" && state.game.status !== "SHOWDOWN") { 
                     document.getElementById('btn-start').classList.add('hidden'); 
                     document.getElementById('btn-force-restart').classList.remove('hidden'); 
+                    document.getElementById('btn-pause-refund').classList.remove('hidden'); // 显示中止退款
                 } else { 
                     document.getElementById('btn-start').classList.remove('hidden'); 
                     document.getElementById('btn-force-restart').classList.add('hidden'); 
+                    document.getElementById('btn-pause-refund').classList.add('hidden'); 
                 }
             }
         } else { 
@@ -851,8 +865,12 @@
             let posClass = ""; 
             if (seatClass.includes("btm")) posClass = "pos-bottom";
             if (seatClass.includes("top")) posClass = "pos-top";
-            if (seatClass.includes("lft")) posClass = "pos-left";
-            if (seatClass.includes("rgt")) posClass = "pos-right";
+            
+            // 【精准制导排版】：覆盖掉原本粗略的左右属性
+            if (seatClass === "s-lft-t") posClass = "s-lft-t";
+            if (seatClass === "s-lft-b") posClass = "s-lft-b";
+            if (seatClass === "s-rgt-t") posClass = "s-rgt-t";
+            if (seatClass === "s-rgt-b") posClass = "s-rgt-b";
 
             if (p) {
                 const isActive = (state.game.status !== "WAITING" && state.game.status !== "SHOWDOWN" && p.seatIndex === state.game.turnIndex);

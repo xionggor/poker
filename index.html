@@ -449,6 +449,9 @@
     let localHandCount = -1;
     let initialDealPlayed = false;
     let winTextPlayed = false;
+    
+    // 【核心新增：防止因为网络延迟导致 6 秒倒计时重置死循环】
+    let isNextHandSent = false; 
 
     function formatMoney(val) { return parseFloat(Number(val).toFixed(2)); }
     function roundToQuarter(val) { return Math.round(val * 4) / 4; }
@@ -682,10 +685,12 @@
     function renderEngine(state) {
         if (!state || !state.game) return;
 
+        // 每次发新的一局牌时，重置动画锁和发车锁
         if (state.game.handCount !== localHandCount) {
             localHandCount = state.game.handCount;
             initialDealPlayed = false;
             winTextPlayed = false;
+            isNextHandSent = false; 
         }
 
         if (state.game.logVersion !== localLogVersion) {
@@ -742,6 +747,10 @@
         prevBurnLength = state.game.burnCards ? state.game.burnCards.length : 0;
 
         let playersArray = state.players || [];
+        const pureMyName = myName.split('|')[1] || myName;
+        const myDataRecord = playersArray.find(p => p && (p.name.split('|')[1] || p.name) === pureMyName);
+        let amISeated = !!(myDataRecord && myDataRecord.seatIndex !== -1);
+        const isHost = (state.game.hostName === myName);
         
         if (playersArray.length > 0) {
             document.getElementById('btn-ledger-top').classList.remove('hidden');
@@ -758,11 +767,6 @@
             ledgerBody += `<tr><td style="text-align:left;">${pName}</td><td>$${formatMoney(p.totalBuyIn)}</td><td>$${formatMoney(p.chips)}</td><td class="${netClass}" style="text-align:right;">${netStr}</td></tr>`;
         });
         document.getElementById("ledger-tbody").innerHTML = ledgerBody;
-
-        const pureMyName = myName.split('|')[1] || myName;
-        const myDataRecord = playersArray.find(p => p && (p.name.split('|')[1] || p.name) === pureMyName);
-        let amISeated = !!(myDataRecord && myDataRecord.seatIndex !== -1);
-        const isHost = (state.game.hostName === myName);
 
         const banner = document.getElementById("winner-banner");
         const showCardsBtn = document.getElementById("show-cards-container");
@@ -784,14 +788,17 @@
                     </div>
                 `;
             } else {
-                // 【核心升级：缩减为 6 秒，且权限封锁！】
-                if (!countdownInterval) {
+                // 【绝杀修复：只有当锁打开时，才创建倒计时；房主发送带签名的指令】
+                if (!countdownInterval && !isNextHandSent) {
                     let timeLeft = 6;
                     countdownInterval = setInterval(() => {
                         timeLeft--; const cdSpan = document.getElementById("auto-start-cd"); if (cdSpan) cdSpan.innerText = timeLeft;
                         if (timeLeft <= 0) { 
                             clearInterval(countdownInterval); countdownInterval = null; 
-                            if (isHost) send({type: 'NEXT_HAND'}); 
+                            if (isHost && !isNextHandSent) {
+                                isNextHandSent = true;
+                                send({type: 'NEXT_HAND', name: myName}); 
+                            }
                         }
                     }, 1000);
                 }
@@ -799,7 +806,7 @@
                     <div style="margin-bottom: 15px; font-size: 16px; line-height: 1.5;">${richMsg}</div>
                     <div style="font-size: 14px; color: #ccc; display: flex; align-items: center; justify-content: center; gap: 15px; background: rgba(0,0,0,0.6); padding: 8px 15px; border-radius: 12px;">
                         <span>下一局: <span id="auto-start-cd" style="color:var(--gold); font-size:20px; font-weight:900;">6</span>s</span>
-                        ${isHost ? `<button onclick="send({type:'NEXT_HAND'})" style="padding: 6px 15px; background: var(--active-green); color: black; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">立刻开始</button>` : `<span style="font-size:12px; color:#888; border: 1px solid #555; padding: 4px 10px; border-radius: 6px;">等待房主开始...</span>`}
+                        ${isHost ? `<button onclick="isNextHandSent=true; send({type:'NEXT_HAND', name:'${myName}'})" style="padding: 6px 15px; background: var(--active-green); color: black; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">立刻开始</button>` : `<span style="font-size:12px; color:#888; border: 1px solid #555; padding: 4px 10px; border-radius: 6px;">等待房主开始...</span>`}
                     </div>
                 `;
             }

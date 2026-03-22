@@ -122,7 +122,6 @@
             100% { box-shadow: 0 0 25px rgba(46, 204, 113, 1), inset 0 0 10px rgba(46, 204, 113, 0.5); }
         }
 
-        /* 【神级视觉：你的专属座位高亮（无徽章版）】 */
         .player-card.my-seat { border-color: #ffd700 !important; box-shadow: 0 0 20px rgba(255, 215, 0, 0.4), inset 0 0 10px rgba(255, 215, 0, 0.2) !important; }
         .player-card.my-seat .player-name { color: #ffd700; font-weight: 900; text-shadow: 0 2px 4px rgba(0,0,0,0.8); font-size: 12px; }
         .player-card.my-seat .player-chips { background: linear-gradient(145deg, #ffd700, #d4b400) !important; color: #000 !important; border-top: 1px solid rgba(255,255,255,0.3); }
@@ -276,7 +275,6 @@
                 <h2 style="color:var(--gold); margin:0;">实时修改规则</h2>
                 <span style="font-size:24px; cursor:pointer; color:#8ca0b3;" onclick="document.getElementById('update-settings-modal').classList.add('hidden')">&times;</span>
             </div>
-            
             <div class="setting-item" style="margin-top:20px;">
                 <span class="setting-label" style="color:#ff9800;">🔥 短牌模式 (6+)</span>
                 <input type="checkbox" id="update-enable-shortdeck" onchange="toggleTwoSeven('update')" style="width:20px; height:20px; cursor:pointer;">
@@ -369,8 +367,7 @@
             <div style="margin-bottom: 10px; opacity: 0.6;">标准底金 $<span id="info-buyin">0</span> | 盲注 <span id="info-blinds">0/0</span></div>
             <button onclick="openUpdateSettings()" class="host-btn" style="background:#f39c12; color:black; margin-bottom:10px;">⚙️ 实时修改规则</button>
             <button onclick="triggerStartGame()" id="btn-start" class="host-btn btn-green" style="margin-top:0;">▶ 开始新一局</button>
-            <button onclick="pauseAndRefund()" id="btn-pause-refund" class="host-btn" style="background:#e67e22; color:black; margin-top:0px;">⏸️ 中止并退款</button>
-            <button onclick="forceRestart()" id="btn-force-restart" class="host-btn btn-red">🛑 强行清理桌面(不退款)</button>
+            <button onclick="pauseAndRefund()" id="btn-pause-refund" class="host-btn btn-red" style="margin-top:0px;">⏸️ 中止并退款</button>
         </div>
 
         <div id="waiting-tip" class="waiting-tip hidden" style="bottom: 30px;">等待对手行动...</div>
@@ -465,7 +462,6 @@
     let winTextPlayed = false;
     let isNextHandSent = false; 
 
-    // 【核心新增：动态互斥锁逻辑】
     function toggleTwoSeven(prefix) {
         const isShortDeck = document.getElementById(prefix + '-enable-shortdeck').checked;
         const tsBox = document.getElementById(prefix + '-enable-twoseven');
@@ -620,7 +616,7 @@
             const shortDeckUI = document.getElementById('update-enable-shortdeck');
             if(shortDeckUI) {
                 shortDeckUI.checked = latestGameState.game.enableShortDeck;
-                toggleTwoSeven('update'); // 触发一次 UI 同步
+                toggleTwoSeven('update'); 
             }
         }
         document.getElementById('update-settings-modal').classList.remove('hidden');
@@ -631,7 +627,6 @@
         const shortDeckUI = document.getElementById('update-enable-shortdeck');
         const shortDeck = shortDeckUI ? shortDeckUI.checked : false;
         
-        // 如果开启了短牌，强制将传给云端的 twoSeven 设为 false
         const twoSeven = shortDeck ? false : document.getElementById('update-enable-twoseven').checked;
         
         send({type: 'UPDATE_SETTINGS', name: myName, settings: { enableStandUp: standUp, enableTwoSeven: twoSeven, enableShortDeck: shortDeck }});
@@ -653,7 +648,6 @@
             const shortDeckUI = document.getElementById('set-enable-shortdeck');
             const enableShortDeck = shortDeckUI ? shortDeckUI.checked : false;
             
-            // 如果开启了短牌，强制将传给云端的 twoSeven 设为 false
             const enableTwoSeven = enableShortDeck ? false : document.getElementById('set-enable-twoseven').checked;
 
             creatorSettings = { 
@@ -670,7 +664,6 @@
     }
 
     function triggerStartGame() { send({ type: 'START_GAME', name: myName }); }
-    function forceRestart() { if(confirm("【警告】强制清理将清空桌面底池和未结算筹码，如需平账退钱，请使用[暂停并退款]按钮。确认清理吗？")) send({ type: 'FORCE_RESTART', name: myName }); }
     function pauseAndRefund() { if(confirm("【安全中止】确定要中止当前对局，并全额退还本局所有盲注和下注到玩家余额吗？")) send({ type: 'PAUSE_REFUND', name: myName }); }
     function confirmPlayerBuyIn() { send({ type: 'BUY_IN', name: myName }); document.getElementById('buyin-console').classList.add('hidden'); }
 
@@ -830,7 +823,6 @@
                     </div>
                 `;
             } else {
-                // 【核心升级：10秒倒数，且防重复发送锁】
                 if (!countdownInterval && !isNextHandSent) {
                     let timeLeft = 10;
                     countdownInterval = setInterval(() => {
@@ -922,6 +914,7 @@
 
         const isWinner = (state.game.winnerName === myName);
 
+        // 【UI净化：控制台仅剩退款按钮】
         if (isHost) {
             if (state.game.status === "LOBBY") {
                 document.getElementById('host-panel').classList.add('hidden');
@@ -931,11 +924,9 @@
                 document.getElementById('host-panel').classList.remove('hidden');
                 if (state.game.status !== "WAITING" && state.game.status !== "SHOWDOWN") { 
                     document.getElementById('btn-start').classList.add('hidden'); 
-                    document.getElementById('btn-force-restart').classList.remove('hidden'); 
                     document.getElementById('btn-pause-refund').classList.remove('hidden'); 
                 } else { 
                     document.getElementById('btn-start').classList.remove('hidden'); 
-                    document.getElementById('btn-force-restart').classList.add('hidden'); 
                     document.getElementById('btn-pause-refund').classList.add('hidden'); 
                 }
             }

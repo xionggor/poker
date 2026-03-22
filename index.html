@@ -122,6 +122,11 @@
             100% { box-shadow: 0 0 25px rgba(46, 204, 113, 1), inset 0 0 10px rgba(46, 204, 113, 0.5); }
         }
 
+        /* 【神级视觉：你的专属座位高亮】 */
+        .player-card.my-seat { border-color: #ffd700 !important; box-shadow: 0 0 20px rgba(255, 215, 0, 0.4), inset 0 0 10px rgba(255, 215, 0, 0.2) !important; }
+        .player-card.my-seat .player-name { color: #ffd700; font-weight: 900; text-shadow: 0 2px 4px rgba(0,0,0,0.8); font-size: 12px; }
+        .player-card.my-seat .player-chips { background: linear-gradient(145deg, #ffd700, #d4b400) !important; color: #000 !important; border-top: 1px solid rgba(255,255,255,0.3); }
+
         .squid-stand { background: #000 !important; border-color: transparent; }
         .squid-sit { background: #e74c3c !important; border-color: #c0392b !important; box-shadow: 0 0 15px rgba(231, 76, 60, 0.6) !important; }
         .squid-sit .player-chips { background: rgba(0,0,0,0.4) !important; color: #fff !important;}
@@ -250,6 +255,12 @@
                 <span class="setting-label" style="color:var(--gold);">趣味抽牌选座 (抢庄)</span>
                 <input type="checkbox" id="set-enable-draw" style="width:20px; height:20px; cursor:pointer;">
             </div>
+            
+            <div class="setting-item">
+                <span class="setting-label" style="color:#ff9800;">🔥 短牌模式 (Short Deck 6+)</span>
+                <input type="checkbox" id="set-enable-shortdeck" style="width:20px; height:20px; cursor:pointer;">
+            </div>
+            
             <div class="setting-item">
                 <span class="setting-label" style="color:#e74c3c;">🦑 鱿鱼生存模式 (Stand Up)</span>
                 <input type="checkbox" id="set-enable-standup" style="width:20px; height:20px; cursor:pointer;">
@@ -267,7 +278,13 @@
                 <h2 style="color:var(--gold); margin:0;">实时修改规则</h2>
                 <span style="font-size:24px; cursor:pointer; color:#8ca0b3;" onclick="document.getElementById('update-settings-modal').classList.add('hidden')">&times;</span>
             </div>
+            
             <div class="setting-item" style="margin-top:20px;">
+                <span class="setting-label" style="color:#ff9800;">🔥 短牌模式 (6+)</span>
+                <input type="checkbox" id="update-enable-shortdeck" style="width:20px; height:20px; cursor:pointer;">
+            </div>
+            
+            <div class="setting-item">
                 <span class="setting-label" style="color:#e74c3c;">🦑 鱿鱼生存模式</span>
                 <input type="checkbox" id="update-enable-standup" style="width:20px; height:20px; cursor:pointer;">
             </div>
@@ -275,7 +292,7 @@
                 <span class="setting-label" style="color:#e74c3c;">🧨 2-7 炸鱼赏金</span>
                 <input type="checkbox" id="update-enable-twoseven" style="width:20px; height:20px; cursor:pointer;">
             </div>
-            <div style="font-size:12px; color:#aaa; margin-bottom:20px; text-align:left;">* 提示：规则修改将在【下一局】正式生效，不影响当前牌局。</div>
+            <div style="font-size:12px; color:#aaa; margin-bottom:20px; text-align:left;">* 提示：规则修改将在【下一局】正式生效，不影响当前牌局。短牌与2-7炸鱼可组合生效。</div>
             <button class="btn-main btn-gold" onclick="submitUpdateSettings()">保存并广播</button>
         </div>
     </div>
@@ -449,8 +466,6 @@
     let localHandCount = -1;
     let initialDealPlayed = false;
     let winTextPlayed = false;
-    
-    // 【核心新增：防止因为网络延迟导致 6 秒倒计时重置死循环】
     let isNextHandSent = false; 
 
     function formatMoney(val) { return parseFloat(Number(val).toFixed(2)); }
@@ -590,6 +605,9 @@
         if(latestGameState && latestGameState.game) {
             document.getElementById('update-enable-standup').checked = latestGameState.game.enableStandUp;
             document.getElementById('update-enable-twoseven').checked = latestGameState.game.enableTwoSeven;
+            // 【同步短牌开关状态】
+            const shortDeckUI = document.getElementById('update-enable-shortdeck');
+            if(shortDeckUI) shortDeckUI.checked = latestGameState.game.enableShortDeck;
         }
         document.getElementById('update-settings-modal').classList.remove('hidden');
     }
@@ -597,7 +615,11 @@
     function submitUpdateSettings() {
         const standUp = document.getElementById('update-enable-standup').checked;
         const twoSeven = document.getElementById('update-enable-twoseven').checked;
-        send({type: 'UPDATE_SETTINGS', name: myName, settings: { enableStandUp: standUp, enableTwoSeven: twoSeven }});
+        // 【获取短牌修改意图】
+        const shortDeckUI = document.getElementById('update-enable-shortdeck');
+        const shortDeck = shortDeckUI ? shortDeckUI.checked : false;
+        
+        send({type: 'UPDATE_SETTINGS', name: myName, settings: { enableStandUp: standUp, enableTwoSeven: twoSeven, enableShortDeck: shortDeck }});
         document.getElementById('update-settings-modal').classList.add('hidden');
     }
 
@@ -614,11 +636,15 @@
             const enableDraw = document.getElementById('set-enable-draw').checked;
             const enableStandUp = document.getElementById('set-enable-standup').checked;
             const enableTwoSeven = document.getElementById('set-enable-twoseven').checked;
+            // 【创建房间时获取短牌选项】
+            const shortDeckUI = document.getElementById('set-enable-shortdeck');
+            const enableShortDeck = shortDeckUI ? shortDeckUI.checked : false;
 
             creatorSettings = { 
                 initialChips: buyInVal, smallBlind: sb, bigBlind: sb * 2,
                 botLevel: botLevel, enableDraw: enableDraw, 
-                enableStandUp: enableStandUp, enableTwoSeven: enableTwoSeven
+                enableStandUp: enableStandUp, enableTwoSeven: enableTwoSeven,
+                enableShortDeck: enableShortDeck
             };
 
             navTo('view-game'); document.getElementById('host-panel').classList.remove('hidden');
@@ -685,7 +711,6 @@
     function renderEngine(state) {
         if (!state || !state.game) return;
 
-        // 每次发新的一局牌时，重置动画锁和发车锁
         if (state.game.handCount !== localHandCount) {
             localHandCount = state.game.handCount;
             initialDealPlayed = false;
@@ -716,7 +741,9 @@
         if (elBuyin) elBuyin.innerText = formatMoney(state.game.buyIn || 30);
         if (elBlinds) elBlinds.innerText = `${formatMoney(state.game.smallBlind || 0.25)}/${formatMoney(state.game.bigBlind || 0.50)}`;
 
-        document.getElementById("ui-pot").innerText = "$" + formatMoney(state.game.pot);
+        // 【短牌模式桌面标识】
+        let potPrefix = state.game.enableShortDeck ? `<span style="color:#ff9800; font-size:10px;">[短牌6+] </span>` : "";
+        document.getElementById("ui-pot").innerHTML = potPrefix + "$" + formatMoney(state.game.pot);
         
         if (state.game.status === "WAITING" || state.game.status === "LOBBY" || state.game.status === "PRE-FLOP") {
             prevBoardLength = 0; prevBurnLength = 0;
@@ -788,9 +815,9 @@
                     </div>
                 `;
             } else {
-                // 【绝杀修复：只有当锁打开时，才创建倒计时；房主发送带签名的指令】
+                // 【核心升级：10 秒黄金倒计时，且权限封锁！】
                 if (!countdownInterval && !isNextHandSent) {
-                    let timeLeft = 6;
+                    let timeLeft = 10;
                     countdownInterval = setInterval(() => {
                         timeLeft--; const cdSpan = document.getElementById("auto-start-cd"); if (cdSpan) cdSpan.innerText = timeLeft;
                         if (timeLeft <= 0) { 
@@ -805,7 +832,7 @@
                 banner.innerHTML = `
                     <div style="margin-bottom: 15px; font-size: 16px; line-height: 1.5;">${richMsg}</div>
                     <div style="font-size: 14px; color: #ccc; display: flex; align-items: center; justify-content: center; gap: 15px; background: rgba(0,0,0,0.6); padding: 8px 15px; border-radius: 12px;">
-                        <span>下一局: <span id="auto-start-cd" style="color:var(--gold); font-size:20px; font-weight:900;">6</span>s</span>
+                        <span>下一局: <span id="auto-start-cd" style="color:var(--gold); font-size:20px; font-weight:900;">10</span>s</span>
                         ${isHost ? `<button onclick="isNextHandSent=true; send({type:'NEXT_HAND', name:'${myName}'})" style="padding: 6px 15px; background: var(--active-green); color: black; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">立刻开始</button>` : `<span style="font-size:12px; color:#888; border: 1px solid #555; padding: 4px 10px; border-radius: 6px;">等待房主开始...</span>`}
                     </div>
                 `;
@@ -950,6 +977,9 @@
                 const isOffline = p.isOnline === false; 
                 const isSpectating = p.isSpectating === true;
                 
+                // 【核心视觉：千人千面，本尊专属高亮】
+                const isMySeat = (p.name === myName);
+                
                 const isDealer = (p.seatIndex === state.game.dealerIndex && state.game.status !== "WAITING" && !isSpectating);
                 const isSB = (p.seatIndex === state.game.sbIndex && state.game.status !== "WAITING" && !isSpectating);
                 const isBB = (p.seatIndex === state.game.bbIndex && state.game.status !== "WAITING" && !isSpectating);
@@ -1020,7 +1050,7 @@
                         
                         <div class="hole-cards">${isOut || isSpectating ? '' : cardsHtml}</div>
 
-                        <div class="player-card ${squidClass} ${isActive && !p.folded && !isOut && !isSpectating ? 'active' : ''} ${isOut || isSpectating ? 'out-state' : ''}" style="${(p.folded && !isOut) ? 'opacity: 0.6;' : ''}">
+                        <div class="player-card ${squidClass} ${isMySeat ? 'my-seat' : ''} ${isActive && !p.folded && !isOut && !isSpectating ? 'active' : ''} ${isOut || isSpectating ? 'out-state' : ''}" style="${(p.folded && !isOut) ? 'opacity: 0.6;' : ''}">
                             ${badgesHtml}
                             ${kickHtml}
                             <div class="player-avatar"><span>${displayAvatar}</span></div>

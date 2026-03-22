@@ -161,7 +161,7 @@
         
         .bet-badge { position: absolute; background: rgba(0,0,0,0.85); padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold; border: 1px solid #777; z-index: 15; white-space: nowrap; color: var(--gold); box-shadow: 0 4px 10px rgba(0,0,0,0.5);}
         
-        /* 【V38.0 重构下注筹码防遮挡坐标】 */
+        /* 【V38.1 终极排版修复：彻底解决侧边筹码重叠问题】 */
         .pos-bottom .hole-cards { top: -45px; left: 50%; transform: translateX(-50%); } 
         .pos-bottom .bet-badge { top: -110px !important; left: 50% !important; transform: translateX(-50%) !important; right: auto !important; } 
         .pos-top .hole-cards { bottom: -45px; left: 50%; transform: translateX(-50%); }
@@ -169,10 +169,10 @@
         
         .s-lft-t .hole-cards, .s-lft-b .hole-cards, .s-rgt-t .hole-cards, .s-rgt-b .hole-cards { top: -45px; left: 50%; transform: translateX(-50%); }
         
-        /* 左上和右上：放到黑卡的下方 (蓝桌布区) */
-        .s-lft-t .bet-badge, .s-rgt-t .bet-badge { top: 105px !important; left: 50% !important; transform: translateX(-50%) !important; right: auto !important; }
-        /* 左下和右下：放到手牌的上方 (蓝桌布区) */
-        .s-lft-b .bet-badge, .s-rgt-b .bet-badge { top: -110px !important; left: 50% !important; transform: translateX(-50%) !important; right: auto !important; }
+        /* 左上和右上：放到黑卡的下方深处，防止和 $29.5 余额重叠 */
+        .s-lft-t .bet-badge, .s-rgt-t .bet-badge { top: 125px !important; left: 50% !important; transform: translateX(-50%) !important; right: auto !important; }
+        /* 左下和右下：放到手牌上方一点点 */
+        .s-lft-b .bet-badge, .s-rgt-b .bet-badge { top: -75px !important; left: 50% !important; transform: translateX(-50%) !important; right: auto !important; }
 
         .s-btm-c { top: 102%; left: 50%; } .s-lft-b { top: 75%; left: 6%; } .s-lft-t { top: 25%; left: 6%; } .s-top-l { top: -2%; left: 22%; } .s-top-c { top: -2%; left: 50%; }
         .s-top-r { top: -2%; left: 78%; } .s-rgt-t { top: 25%; left: 94%; } .s-rgt-b { top: 75%; left: 94%; } .s-btm-r { top: 102%; left: 78%; } .s-btm-l { top: 102%; left: 22%; }
@@ -431,21 +431,21 @@
         <div class="ledger-box">
             <button onclick="toggleChangelog()" style="background:none; border:none; color:#349feb; cursor:pointer; font-size:12px; margin-bottom:10px; text-decoration:underline;">ℹ️ 版本更新日志</button>
             <div id="changelog-area" class="hidden" style="text-align:left; font-size:12px; color:#aaa; background:#111; padding:10px; border-radius:8px; margin-bottom:15px; max-height:150px; overflow-y:auto; border:1px solid #333;">
-                <strong style="color:var(--gold)">v38.0 - 视效排版与自定义罚金 (当前版本)</strong><br>
-                - 🦑 [模式] 鱿鱼生存模式新增自定义罚金输入框，告别固定 $1。<br>
-                - 📐 [排版] 精准重构左右侧玩家下注筹码坐标，彻底解决遮挡底牌和本金的问题。<br><br>
+                <strong style="color:var(--gold)">v38.1 - 平分破产与终极校准 (当前版本)</strong><br>
+                - 📏 [排版] 精准重构高低位玩家下注筹码坐标，彻底解决遮挡底牌和本金问题。<br>
+                - 🦑 [模式] 修复中途加入者被误判水鬼的Bug；水鬼破产时，将启动Robin Hood机制平分剩余金额。<br>
+                - 🛑 [UI] YOUR TURN 操作台再次深度退让避让 (140px)，完全解放底层视野。<br><br>
+                <strong style="color:var(--gold)">v38.0 - 自定义罚金</strong><br>
+                - 🦑 [模式] 鱿鱼生存模式新增自定义罚金输入框，告别固定 $1。<br><br>
                 <strong style="color:var(--gold)">v37.5 - 净网与自治</strong><br>
                 - 👑 [房主] 战绩表新增“抹除记录”权限（附平账警告）。<br>
-                - 🏃 [玩家] 右下角新增专属控制台：可中途“加入观看”或“离开游戏”。<br>
-                - 📜 [系统] 战绩表内嵌极简版本更新日志。<br><br>
+                - 🏃 [玩家] 右下角新增专属控制台：可中途“加入观看”或“离开游戏”。<br><br>
                 <strong style="color:var(--gold)">v37.3 - 视效与避让</strong><br>
-                - 💬 [视觉] 聊天舱底层黑板剥离，8秒无操作自动隐身，仅留输入管。<br>
-                - 🛑 [UI] 轮到操作时，牌桌全景后退 120px，彻底避让操作台。<br><br>
+                - 💬 [视觉] 聊天舱底层黑板剥离，8秒无操作自动隐身，仅留输入管。<br><br>
                 <strong style="color:var(--gold)">v37.2 - 专色防伪结算</strong><br>
-                - 🃏 [结算] 亮牌决胜圈玩家底牌标红，公牌纯白。<br>
-                - ⏱ [节奏] 结算等待时间回调至 10 秒。<br><br>
+                - 🃏 [结算] 亮牌决胜圈精准比对：玩家底牌标红，公牌纯白。<br><br>
                 <strong style="color:var(--gold)">v37.1 - 短牌降临</strong><br>
-                - 🔥 [模式] 底层实装“短牌 6+”模式，纯净建房互斥 UI 设计。
+                - 🔥 [模式] 底层发牌引擎实装“短牌 6+”模式。纯净建房互斥 UI 设计。
             </div>
 
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -686,7 +686,6 @@
     function openUpdateSettings() {
         if(latestGameState && latestGameState.game) {
             document.getElementById('update-enable-standup').checked = latestGameState.game.enableStandUp;
-            // 【同步房主的罚金设定数值】
             document.getElementById('update-standup-amt').value = latestGameState.game.standUpPenalty || 1;
             document.getElementById('update-enable-twoseven').checked = latestGameState.game.enableTwoSeven;
             const shortDeckUI = document.getElementById('update-enable-shortdeck');
@@ -700,7 +699,7 @@
 
     function submitUpdateSettings() {
         const standUp = document.getElementById('update-enable-standup').checked;
-        const standUpAmt = parseFloat(document.getElementById('update-standup-amt').value) || 1; // 获取罚金
+        const standUpAmt = parseFloat(document.getElementById('update-standup-amt').value) || 1;
         const shortDeckUI = document.getElementById('update-enable-shortdeck');
         const shortDeck = shortDeckUI ? shortDeckUI.checked : false;
         const twoSeven = shortDeck ? false : document.getElementById('update-enable-twoseven').checked;
@@ -721,7 +720,7 @@
             const botLevel = parseInt(document.getElementById('set-bot-level').value) || 1;
             const enableDraw = document.getElementById('set-enable-draw').checked;
             const enableStandUp = document.getElementById('set-enable-standup').checked;
-            const standUpAmt = parseFloat(document.getElementById('set-standup-amt').value) || 1; // 获取创建时罚金
+            const standUpAmt = parseFloat(document.getElementById('set-standup-amt').value) || 1;
             const shortDeckUI = document.getElementById('set-enable-shortdeck');
             const enableShortDeck = shortDeckUI ? shortDeckUI.checked : false;
             
@@ -1175,17 +1174,21 @@
         buyinConsole.classList.add("hidden");
         waitingTip.classList.add("hidden"); 
         tableContainer.style.transform = "translateY(0) scale(1)";
+        tableContainer.style.transformOrigin = "center center"; // 重置
 
         if (amISeated) {
             if (myDataRecord.chips === 0 && (state.game.status === "WAITING" || state.game.status === "SHOWDOWN" || myDataRecord.isOut || myDataRecord.isSpectating)) {
                 buyinConsole.classList.remove("hidden");
-                tableContainer.style.transform = "translateY(-120px) scale(0.85)";
+                tableContainer.style.transformOrigin = "top center";
+                tableContainer.style.transform = "translateY(-140px) scale(0.82)";
                 document.getElementById('ui-buyin-amount').innerText = formatMoney(state.game.buyIn || 30);
             } 
             else if (state.game.status !== "WAITING" && state.game.status !== "LOBBY" && state.game.status !== "DRAWING" && state.game.status !== "PICK_SEAT" && state.game.status !== "SHOWDOWN" && !myDataRecord.folded && !myDataRecord.isSpectating && myDataRecord.chips > 0) {
                 if (isMyTurn) {
                     actionConsole.classList.remove("hidden"); 
-                    tableContainer.style.transform = "translateY(-120px) scale(0.85)";
+                    // 【全景避让机制：改变变换原点，绝对不挡底部玩家】
+                    tableContainer.style.transformOrigin = "top center";
+                    tableContainer.style.transform = "translateY(-140px) scale(0.82)";
                     
                     const currentBet = parseFloat(state.game.currentBet) || 0; const myBet = parseFloat(myDataRecord.betThisRound) || 0; const myChips = parseFloat(myDataRecord.chips) || 0; 
                     

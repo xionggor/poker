@@ -62,7 +62,6 @@
         .lobby-item { font-size: 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
         .lobby-item span { font-size: 20px; }
 
-        /* 【V37.5 史诗视觉：完全剥离的极简悬浮输入管，8秒智能呼吸聊天面板】 */
         #chat-zone { position:absolute; bottom:20px; left:20px; width:280px; display:flex; flex-direction:column; z-index:95; }
         #chat-list { height:150px; overflow-y:auto; padding:12px; font-size:13px; color:#ddd; display:flex; flex-direction:column; gap:8px; scroll-behavior: smooth; transition: opacity 0.4s ease; opacity: 0; background:rgba(17, 21, 26, 0.85); border:1px solid #333; border-radius:12px; margin-bottom: 5px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);}
         #chat-zone:hover #chat-list, #chat-zone:focus-within #chat-list, #chat-list.active { opacity: 1; }
@@ -162,15 +161,18 @@
         
         .bet-badge { position: absolute; background: rgba(0,0,0,0.85); padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold; border: 1px solid #777; z-index: 15; white-space: nowrap; color: var(--gold); box-shadow: 0 4px 10px rgba(0,0,0,0.5);}
         
-        /* 【V37.5 史诗排版：所有下注筹码死死推向蓝桌布，绝不遮挡卡片本金】 */
+        /* 【V38.0 重构下注筹码防遮挡坐标】 */
         .pos-bottom .hole-cards { top: -45px; left: 50%; transform: translateX(-50%); } 
         .pos-bottom .bet-badge { top: -110px !important; left: 50% !important; transform: translateX(-50%) !important; right: auto !important; } 
         .pos-top .hole-cards { bottom: -45px; left: 50%; transform: translateX(-50%); }
         .pos-top .bet-badge { bottom: -110px !important; top: auto !important; left: 50% !important; transform: translateX(-50%) !important; right: auto !important; } 
         
         .s-lft-t .hole-cards, .s-lft-b .hole-cards, .s-rgt-t .hole-cards, .s-rgt-b .hole-cards { top: -45px; left: 50%; transform: translateX(-50%); }
-        .s-lft-b .bet-badge, .s-lft-t .bet-badge { top: 20px !important; left: 130px !important; transform: none !important; right: auto !important; }
-        .s-rgt-b .bet-badge, .s-rgt-t .bet-badge { top: 20px !important; right: 130px !important; transform: none !important; left: auto !important; }
+        
+        /* 左上和右上：放到黑卡的下方 (蓝桌布区) */
+        .s-lft-t .bet-badge, .s-rgt-t .bet-badge { top: 105px !important; left: 50% !important; transform: translateX(-50%) !important; right: auto !important; }
+        /* 左下和右下：放到手牌的上方 (蓝桌布区) */
+        .s-lft-b .bet-badge, .s-rgt-b .bet-badge { top: -110px !important; left: 50% !important; transform: translateX(-50%) !important; right: auto !important; }
 
         .s-btm-c { top: 102%; left: 50%; } .s-lft-b { top: 75%; left: 6%; } .s-lft-t { top: 25%; left: 6%; } .s-top-l { top: -2%; left: 22%; } .s-top-c { top: -2%; left: 50%; }
         .s-top-r { top: -2%; left: 78%; } .s-rgt-t { top: 25%; left: 94%; } .s-rgt-b { top: 75%; left: 94%; } .s-btm-r { top: 102%; left: 78%; } .s-btm-l { top: 102%; left: 22%; }
@@ -185,7 +187,6 @@
         .btn-red { background: #e74c3c; color: white; margin-top: 5px;}
         .host-btn:hover { filter: brightness(1.1); transform: scale(1.02); }
 
-        /* 【V37.5 史诗排版：操作台极致瘦身，腾出底层视野】 */
         .action-console { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(17, 21, 26, 0.95); border: 1px solid #333; border-radius: 16px; padding: 15px; width: 460px; box-shadow: 0 20px 50px rgba(0,0,0,0.8); display: flex; flex-direction: column; gap: 10px; z-index: 100; }
         .turn-badge { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); background: #2ecc71; color: black; font-weight: 900; font-size: 13px; padding: 4px 15px; border-radius: 20px; letter-spacing: 1px; box-shadow: 0 4px 10px rgba(46, 204, 113, 0.4); }
         .raise-control-area { display: flex; flex-direction: column; gap: 10px; background: #1a2028; padding: 12px; border-radius: 12px; border: 1px solid #2a3441; }
@@ -259,10 +260,16 @@
                 <span class="setting-label" style="color:#ff9800;">🔥 短牌模式 (Short Deck 6+)</span>
                 <input type="checkbox" id="set-enable-shortdeck" onchange="toggleTwoSeven('set')" style="width:20px; height:20px; cursor:pointer;">
             </div>
+            
             <div class="setting-item">
-                <span class="setting-label" style="color:#e74c3c;">🦑 鱿鱼生存模式 (Stand Up)</span>
-                <input type="checkbox" id="set-enable-standup" style="width:20px; height:20px; cursor:pointer;">
+                <span class="setting-label" style="color:#e74c3c;">🦑 鱿鱼生存模式</span>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:12px; color:#aaa;">罚金 $</span>
+                    <input type="number" id="set-standup-amt" value="1" style="width:40px; background:#1a2028; border:1px solid #444; color:white; border-radius:4px; text-align:center; outline:none;" title="起立者向每人支付金额">
+                    <input type="checkbox" id="set-enable-standup" style="width:20px; height:20px; cursor:pointer;">
+                </div>
             </div>
+
             <div class="setting-item" id="set-twoseven-container">
                 <span class="setting-label" style="color:#e74c3c;">🧨 2-7 炸鱼赏金 (The 2-7 Bounty)</span>
                 <input type="checkbox" id="set-enable-twoseven" style="width:20px; height:20px; cursor:pointer;">
@@ -280,10 +287,16 @@
                 <span class="setting-label" style="color:#ff9800;">🔥 短牌模式 (6+)</span>
                 <input type="checkbox" id="update-enable-shortdeck" onchange="toggleTwoSeven('update')" style="width:20px; height:20px; cursor:pointer;">
             </div>
+            
             <div class="setting-item">
                 <span class="setting-label" style="color:#e74c3c;">🦑 鱿鱼生存模式</span>
-                <input type="checkbox" id="update-enable-standup" style="width:20px; height:20px; cursor:pointer;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:12px; color:#aaa;">罚金 $</span>
+                    <input type="number" id="update-standup-amt" value="1" style="width:40px; background:#1a2028; border:1px solid #444; color:white; border-radius:4px; text-align:center; outline:none;">
+                    <input type="checkbox" id="update-enable-standup" style="width:20px; height:20px; cursor:pointer;">
+                </div>
             </div>
+
             <div class="setting-item" id="update-twoseven-container">
                 <span class="setting-label" style="color:#e74c3c;">🧨 2-7 炸鱼赏金</span>
                 <input type="checkbox" id="update-enable-twoseven" style="width:20px; height:20px; cursor:pointer;">
@@ -418,21 +431,21 @@
         <div class="ledger-box">
             <button onclick="toggleChangelog()" style="background:none; border:none; color:#349feb; cursor:pointer; font-size:12px; margin-bottom:10px; text-decoration:underline;">ℹ️ 版本更新日志</button>
             <div id="changelog-area" class="hidden" style="text-align:left; font-size:12px; color:#aaa; background:#111; padding:10px; border-radius:8px; margin-bottom:15px; max-height:150px; overflow-y:auto; border:1px solid #333;">
-                <strong style="color:var(--gold)">v37.5 - 净网与自治 (当前版本)</strong><br>
+                <strong style="color:var(--gold)">v38.0 - 视效排版与自定义罚金 (当前版本)</strong><br>
+                - 🦑 [模式] 鱿鱼生存模式新增自定义罚金输入框，告别固定 $1。<br>
+                - 📐 [排版] 精准重构左右侧玩家下注筹码坐标，彻底解决遮挡底牌和本金的问题。<br><br>
+                <strong style="color:var(--gold)">v37.5 - 净网与自治</strong><br>
                 - 👑 [房主] 战绩表新增“抹除记录”权限（附平账警告）。<br>
                 - 🏃 [玩家] 右下角新增专属控制台：可中途“加入观看”或“离开游戏”。<br>
                 - 📜 [系统] 战绩表内嵌极简版本更新日志。<br><br>
                 <strong style="color:var(--gold)">v37.3 - 视效与避让</strong><br>
                 - 💬 [视觉] 聊天舱底层黑板剥离，8秒无操作自动隐身，仅留输入管。<br>
-                - 🛑 [UI] 轮到操作时，牌桌全景后退 120px，彻底解决操作台遮挡底牌问题。<br>
-                - 🪙 [UI] 下注筹码重定位，强制推向蓝桌布，不再遮挡玩家资金。<br><br>
+                - 🛑 [UI] 轮到操作时，牌桌全景后退 120px，彻底避让操作台。<br><br>
                 <strong style="color:var(--gold)">v37.2 - 专色防伪结算</strong><br>
-                - 🃏 [结算] 亮牌决胜圈精准比对：玩家底牌标红，公牌纯白，一眼看清成牌。<br>
-                - ⏱ [节奏] 结算等待时间回调至最舒适的 10 秒。<br>
-                - 🧹 [极简] 房主控制台剔除“强行清理”，仅保留安全的“中止并退款”。<br><br>
+                - 🃏 [结算] 亮牌决胜圈玩家底牌标红，公牌纯白。<br>
+                - ⏱ [节奏] 结算等待时间回调至 10 秒。<br><br>
                 <strong style="color:var(--gold)">v37.1 - 短牌降临</strong><br>
-                - 🔥 [模式] 底层发牌引擎实装“短牌 6+”模式。<br>
-                - 🔒 [互锁] 纯净建房设计：勾选短牌时，2-7炸鱼玩法自动灰显禁用。
+                - 🔥 [模式] 底层实装“短牌 6+”模式，纯净建房互斥 UI 设计。
             </div>
 
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -525,21 +538,18 @@
     function closeLedger() { document.getElementById('ledger-modal').classList.add('hidden'); }
     function toggleLogDrawer() { document.getElementById('log-drawer').classList.toggle('open'); }
 
-    // 【房主专属净网权限】
     function purgeRecord(targetName) {
         if(confirm("【高危操作】确定要彻底抹除该玩家的数据吗？\n如果该玩家曾参与过输赢，强行删除将导致全桌总盈亏无法配平（出现死账）！\n仅建议删除未产生实际交易的误加玩家。")) {
             send({type: 'PURGE_RECORD', name: myName, targetName: targetName});
         }
     }
 
-    // 【玩家自治：离座旁观】
     function standUpToSpectate() {
         if(confirm("确定要站起并加入观看席吗？\n如果当前正在局中，您将自动弃牌（已下注金额不退还）。")) {
             send({type: 'LEAVE_SEAT', name: myName});
         }
     }
 
-    // 【玩家自治：彻底离开游戏】
     function exitGame() {
         if(confirm("确定要离开房间吗？\n如果当前正在局中，您将自动弃牌。您的战绩会保留在账单中。")) {
             send({type: 'EXIT_GAME', name: myName});
@@ -676,6 +686,8 @@
     function openUpdateSettings() {
         if(latestGameState && latestGameState.game) {
             document.getElementById('update-enable-standup').checked = latestGameState.game.enableStandUp;
+            // 【同步房主的罚金设定数值】
+            document.getElementById('update-standup-amt').value = latestGameState.game.standUpPenalty || 1;
             document.getElementById('update-enable-twoseven').checked = latestGameState.game.enableTwoSeven;
             const shortDeckUI = document.getElementById('update-enable-shortdeck');
             if(shortDeckUI) {
@@ -688,12 +700,12 @@
 
     function submitUpdateSettings() {
         const standUp = document.getElementById('update-enable-standup').checked;
+        const standUpAmt = parseFloat(document.getElementById('update-standup-amt').value) || 1; // 获取罚金
         const shortDeckUI = document.getElementById('update-enable-shortdeck');
         const shortDeck = shortDeckUI ? shortDeckUI.checked : false;
-        
         const twoSeven = shortDeck ? false : document.getElementById('update-enable-twoseven').checked;
         
-        send({type: 'UPDATE_SETTINGS', name: myName, settings: { enableStandUp: standUp, enableTwoSeven: twoSeven, enableShortDeck: shortDeck }});
+        send({type: 'UPDATE_SETTINGS', name: myName, settings: { enableStandUp: standUp, standUpPenalty: standUpAmt, enableTwoSeven: twoSeven, enableShortDeck: shortDeck }});
         document.getElementById('update-settings-modal').classList.add('hidden');
     }
 
@@ -709,6 +721,7 @@
             const botLevel = parseInt(document.getElementById('set-bot-level').value) || 1;
             const enableDraw = document.getElementById('set-enable-draw').checked;
             const enableStandUp = document.getElementById('set-enable-standup').checked;
+            const standUpAmt = parseFloat(document.getElementById('set-standup-amt').value) || 1; // 获取创建时罚金
             const shortDeckUI = document.getElementById('set-enable-shortdeck');
             const enableShortDeck = shortDeckUI ? shortDeckUI.checked : false;
             
@@ -717,8 +730,8 @@
             creatorSettings = { 
                 initialChips: buyInVal, smallBlind: sb, bigBlind: sb * 2,
                 botLevel: botLevel, enableDraw: enableDraw, 
-                enableStandUp: enableStandUp, enableTwoSeven: enableTwoSeven,
-                enableShortDeck: enableShortDeck
+                enableStandUp: enableStandUp, standUpPenalty: standUpAmt,
+                enableTwoSeven: enableTwoSeven, enableShortDeck: enableShortDeck
             };
 
             navTo('view-game'); document.getElementById('host-panel').classList.remove('hidden');
@@ -864,7 +877,6 @@
             const netClass = netVal > 0 ? 'text-green' : (netVal < 0 ? 'text-red' : '');
             const netStr = netVal > 0 ? `+$${formatMoney(netVal)}` : (netVal < 0 ? `-$${formatMoney(Math.abs(netVal))}` : `$0`);
             const pName = p.name.split('|')[1] || p.name;
-            // 【房主赋权：净化战绩表数据按钮】
             let purgeBtn = isHost ? `<button style="background:transparent; border:none; color:#e74c3c; cursor:pointer; font-weight:bold; font-size:16px; padding:0 0 0 10px;" onclick="purgeRecord('${p.name}')" title="抹除此记录">✖</button>` : '';
             ledgerBody += `<tr><td style="text-align:left;">${pName}</td><td>$${formatMoney(p.totalBuyIn)}</td><td>$${formatMoney(p.chips)}</td><td class="${netClass}" style="text-align:right; white-space:nowrap;">${netStr} ${purgeBtn}</td></tr>`;
         });
@@ -876,8 +888,6 @@
 
         if (state.game.status === "SHOWDOWN") {
             const hasBankrupt = playersArray.some(p => !p.isKicked && p.seatIndex !== -1 && (p.chips === 0 || p.isOut) && !p.isSpectating);
-            
-            // 【UI 净化：仅剥离红色方块背景推土机，信任后端纯正原码】
             let richMsg = state.game.winMessage;
 
             if (hasBankrupt) {
@@ -981,7 +991,6 @@
 
         const isWinner = (state.game.winnerName === myName);
 
-        // 【生态闭环：分离房主控制台与玩家控制台】
         if (isHost) {
             document.getElementById('player-panel').classList.add('hidden');
             if (state.game.status === "LOBBY") {
@@ -1170,14 +1179,12 @@
         if (amISeated) {
             if (myDataRecord.chips === 0 && (state.game.status === "WAITING" || state.game.status === "SHOWDOWN" || myDataRecord.isOut || myDataRecord.isSpectating)) {
                 buyinConsole.classList.remove("hidden");
-                // 【120px 极致避让】
                 tableContainer.style.transform = "translateY(-120px) scale(0.85)";
                 document.getElementById('ui-buyin-amount').innerText = formatMoney(state.game.buyIn || 30);
             } 
             else if (state.game.status !== "WAITING" && state.game.status !== "LOBBY" && state.game.status !== "DRAWING" && state.game.status !== "PICK_SEAT" && state.game.status !== "SHOWDOWN" && !myDataRecord.folded && !myDataRecord.isSpectating && myDataRecord.chips > 0) {
                 if (isMyTurn) {
                     actionConsole.classList.remove("hidden"); 
-                    // 【120px 极致避让】
                     tableContainer.style.transform = "translateY(-120px) scale(0.85)";
                     
                     const currentBet = parseFloat(state.game.currentBet) || 0; const myBet = parseFloat(myDataRecord.betThisRound) || 0; const myChips = parseFloat(myDataRecord.chips) || 0; 

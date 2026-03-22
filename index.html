@@ -62,13 +62,13 @@
         .lobby-item { font-size: 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
         .lobby-item span { font-size: 20px; }
 
-        /* 【神级视效：智能呼吸隐身聊天舱】 */
-        #chat-zone { position:absolute; bottom:20px; left:20px; width:280px; background:rgba(17, 21, 26, 0.85); border:1px solid #333; border-radius:12px; display:flex; flex-direction:column; z-index:95; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        #chat-list { height:150px; overflow-y:auto; padding:12px; font-size:13px; color:#ddd; display:flex; flex-direction:column; gap:8px; scroll-behavior: smooth; transition: opacity 0.4s ease; opacity: 0; }
+        /* 【V37.5 史诗视觉：完全剥离的极简悬浮输入管，8秒智能呼吸聊天面板】 */
+        #chat-zone { position:absolute; bottom:20px; left:20px; width:280px; display:flex; flex-direction:column; z-index:95; }
+        #chat-list { height:150px; overflow-y:auto; padding:12px; font-size:13px; color:#ddd; display:flex; flex-direction:column; gap:8px; scroll-behavior: smooth; transition: opacity 0.4s ease; opacity: 0; background:rgba(17, 21, 26, 0.85); border:1px solid #333; border-radius:12px; margin-bottom: 5px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);}
         #chat-zone:hover #chat-list, #chat-zone:focus-within #chat-list, #chat-list.active { opacity: 1; }
         #chat-list div { background: rgba(0,0,0,0.3); padding: 6px 10px; border-radius: 8px; word-wrap: break-word;}
-        #chat-input { background:rgba(0,0,0,0.5); border:none; border-top:1px solid #444; color:white; padding:12px; font-size:13px; outline:none; border-bottom-left-radius:12px; border-bottom-right-radius:12px;}
-        #chat-input:focus { background:rgba(255,255,255,0.05); }
+        #chat-input { background:rgba(0,0,0,0.6); border:1px solid #444; color:white; padding:12px; font-size:13px; outline:none; border-radius:20px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); transition: 0.3s;}
+        #chat-input:focus { border-color: var(--gold); background:rgba(17, 21, 26, 0.95); }
 
         .draw-deck-area { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; gap: 15px; z-index: 100; }
         .draw-card { width: 70px; height: 100px; background: white; border-radius: 8px; cursor: pointer; box-shadow: 0 10px 30px rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; font-weight: 900; color: black; font-size: 26px; transition: 0.3s; position: relative;}
@@ -162,15 +162,15 @@
         
         .bet-badge { position: absolute; background: rgba(0,0,0,0.85); padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold; border: 1px solid #777; z-index: 15; white-space: nowrap; color: var(--gold); box-shadow: 0 4px 10px rgba(0,0,0,0.5);}
         
-        /* 【神级避让：所有下注筹码都被精确踢出卡片区域，推向蓝色桌面】 */
+        /* 【V37.5 史诗排版：所有下注筹码死死推向蓝桌布，绝不遮挡卡片本金】 */
         .pos-bottom .hole-cards { top: -45px; left: 50%; transform: translateX(-50%); } 
         .pos-bottom .bet-badge { top: -110px !important; left: 50% !important; transform: translateX(-50%) !important; right: auto !important; } 
         .pos-top .hole-cards { bottom: -45px; left: 50%; transform: translateX(-50%); }
         .pos-top .bet-badge { bottom: -110px !important; top: auto !important; left: 50% !important; transform: translateX(-50%) !important; right: auto !important; } 
         
         .s-lft-t .hole-cards, .s-lft-b .hole-cards, .s-rgt-t .hole-cards, .s-rgt-b .hole-cards { top: -45px; left: 50%; transform: translateX(-50%); }
-        .s-lft-b .bet-badge, .s-lft-t .bet-badge { top: 20px !important; left: 125px !important; transform: none !important; right: auto !important; }
-        .s-rgt-b .bet-badge, .s-rgt-t .bet-badge { top: 20px !important; right: 125px !important; transform: none !important; left: auto !important; }
+        .s-lft-b .bet-badge, .s-lft-t .bet-badge { top: 20px !important; left: 130px !important; transform: none !important; right: auto !important; }
+        .s-rgt-b .bet-badge, .s-rgt-t .bet-badge { top: 20px !important; right: 130px !important; transform: none !important; left: auto !important; }
 
         .s-btm-c { top: 102%; left: 50%; } .s-lft-b { top: 75%; left: 6%; } .s-lft-t { top: 25%; left: 6%; } .s-top-l { top: -2%; left: 22%; } .s-top-c { top: -2%; left: 50%; }
         .s-top-r { top: -2%; left: 78%; } .s-rgt-t { top: 25%; left: 94%; } .s-rgt-b { top: 75%; left: 94%; } .s-btm-r { top: 102%; left: 78%; } .s-btm-l { top: 102%; left: 22%; }
@@ -185,7 +185,7 @@
         .btn-red { background: #e74c3c; color: white; margin-top: 5px;}
         .host-btn:hover { filter: brightness(1.1); transform: scale(1.02); }
 
-        /* 【极致瘦身的操作台，给底牌让出巨大视野】 */
+        /* 【V37.5 史诗排版：操作台极致瘦身，腾出底层视野】 */
         .action-console { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(17, 21, 26, 0.95); border: 1px solid #333; border-radius: 16px; padding: 15px; width: 460px; box-shadow: 0 20px 50px rgba(0,0,0,0.8); display: flex; flex-direction: column; gap: 10px; z-index: 100; }
         .turn-badge { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); background: #2ecc71; color: black; font-weight: 900; font-size: 13px; padding: 4px 15px; border-radius: 20px; letter-spacing: 1px; box-shadow: 0 4px 10px rgba(46, 204, 113, 0.4); }
         .raise-control-area { display: flex; flex-direction: column; gap: 10px; background: #1a2028; padding: 12px; border-radius: 12px; border: 1px solid #2a3441; }
@@ -371,6 +371,12 @@
             <button onclick="pauseAndRefund()" id="btn-pause-refund" class="host-btn btn-red" style="margin-top:0px;">⏸️ 中止并退款</button>
         </div>
 
+        <div class="host-panel hidden" id="player-panel">
+            <div style="margin-bottom: 5px; opacity: 0.8; font-weight:bold; color:#349feb;">👤 玩家控制台</div>
+            <button onclick="standUpToSpectate()" class="host-btn" style="background:#2a3441; color:white;">👀 加入观看</button>
+            <button onclick="exitGame()" class="host-btn btn-red" style="margin-top:8px;">🏃 离开游戏</button>
+        </div>
+
         <div id="waiting-tip" class="waiting-tip hidden" style="bottom: 30px;">等待对手行动...</div>
 
         <div id="action-console" class="action-console hidden">
@@ -410,6 +416,25 @@
 
     <div id="ledger-modal" class="ledger-modal hidden">
         <div class="ledger-box">
+            <button onclick="toggleChangelog()" style="background:none; border:none; color:#349feb; cursor:pointer; font-size:12px; margin-bottom:10px; text-decoration:underline;">ℹ️ 版本更新日志</button>
+            <div id="changelog-area" class="hidden" style="text-align:left; font-size:12px; color:#aaa; background:#111; padding:10px; border-radius:8px; margin-bottom:15px; max-height:150px; overflow-y:auto; border:1px solid #333;">
+                <strong style="color:var(--gold)">v37.5 - 净网与自治 (当前版本)</strong><br>
+                - 👑 [房主] 战绩表新增“抹除记录”权限（附平账警告）。<br>
+                - 🏃 [玩家] 右下角新增专属控制台：可中途“加入观看”或“离开游戏”。<br>
+                - 📜 [系统] 战绩表内嵌极简版本更新日志。<br><br>
+                <strong style="color:var(--gold)">v37.3 - 视效与避让</strong><br>
+                - 💬 [视觉] 聊天舱底层黑板剥离，8秒无操作自动隐身，仅留输入管。<br>
+                - 🛑 [UI] 轮到操作时，牌桌全景后退 120px，彻底解决操作台遮挡底牌问题。<br>
+                - 🪙 [UI] 下注筹码重定位，强制推向蓝桌布，不再遮挡玩家资金。<br><br>
+                <strong style="color:var(--gold)">v37.2 - 专色防伪结算</strong><br>
+                - 🃏 [结算] 亮牌决胜圈精准比对：玩家底牌标红，公牌纯白，一眼看清成牌。<br>
+                - ⏱ [节奏] 结算等待时间回调至最舒适的 10 秒。<br>
+                - 🧹 [极简] 房主控制台剔除“强行清理”，仅保留安全的“中止并退款”。<br><br>
+                <strong style="color:var(--gold)">v37.1 - 短牌降临</strong><br>
+                - 🔥 [模式] 底层发牌引擎实装“短牌 6+”模式。<br>
+                - 🔒 [互锁] 纯净建房设计：勾选短牌时，2-7炸鱼玩法自动灰显禁用。
+            </div>
+
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                 <h2 style="color:var(--gold); margin:0;">账单统计 (Ledger)</h2>
                 <span style="font-size:24px; cursor:pointer; color:#8ca0b3;" onclick="closeLedger()">&times;</span>
@@ -463,7 +488,6 @@
     let winTextPlayed = false;
     let isNextHandSent = false; 
     
-    // 【电竞级交互：智能呼吸聊天舱控制器】
     let chatSleepTimer = null;
     function wakeUpChat() {
         const cl = document.getElementById('chat-list');
@@ -490,12 +514,38 @@
         }
     }
 
+    function toggleChangelog() {
+        document.getElementById('changelog-area').classList.toggle('hidden');
+    }
+
     function formatMoney(val) { return parseFloat(Number(val).toFixed(2)); }
     function roundToQuarter(val) { return Math.round(val * 4) / 4; }
 
     function openLedger() { document.getElementById('ledger-modal').classList.remove('hidden'); document.getElementById('settlement-area').style.display = 'none'; }
     function closeLedger() { document.getElementById('ledger-modal').classList.add('hidden'); }
     function toggleLogDrawer() { document.getElementById('log-drawer').classList.toggle('open'); }
+
+    // 【房主专属净网权限】
+    function purgeRecord(targetName) {
+        if(confirm("【高危操作】确定要彻底抹除该玩家的数据吗？\n如果该玩家曾参与过输赢，强行删除将导致全桌总盈亏无法配平（出现死账）！\n仅建议删除未产生实际交易的误加玩家。")) {
+            send({type: 'PURGE_RECORD', name: myName, targetName: targetName});
+        }
+    }
+
+    // 【玩家自治：离座旁观】
+    function standUpToSpectate() {
+        if(confirm("确定要站起并加入观看席吗？\n如果当前正在局中，您将自动弃牌（已下注金额不退还）。")) {
+            send({type: 'LEAVE_SEAT', name: myName});
+        }
+    }
+
+    // 【玩家自治：彻底离开游戏】
+    function exitGame() {
+        if(confirm("确定要离开房间吗？\n如果当前正在局中，您将自动弃牌。您的战绩会保留在账单中。")) {
+            send({type: 'EXIT_GAME', name: myName});
+            setTimeout(() => { window.location.href = window.location.pathname; }, 500);
+        }
+    }
 
     function generateSettlement() {
         if(!latestGameState || !latestGameState.players) return;
@@ -640,6 +690,7 @@
         const standUp = document.getElementById('update-enable-standup').checked;
         const shortDeckUI = document.getElementById('update-enable-shortdeck');
         const shortDeck = shortDeckUI ? shortDeckUI.checked : false;
+        
         const twoSeven = shortDeck ? false : document.getElementById('update-enable-twoseven').checked;
         
         send({type: 'UPDATE_SETTINGS', name: myName, settings: { enableStandUp: standUp, enableTwoSeven: twoSeven, enableShortDeck: shortDeck }});
@@ -660,6 +711,7 @@
             const enableStandUp = document.getElementById('set-enable-standup').checked;
             const shortDeckUI = document.getElementById('set-enable-shortdeck');
             const enableShortDeck = shortDeckUI ? shortDeckUI.checked : false;
+            
             const enableTwoSeven = enableShortDeck ? false : document.getElementById('set-enable-twoseven').checked;
 
             creatorSettings = { 
@@ -751,7 +803,7 @@
             chatList.innerHTML = state.game.chatLogs.map(c => `<div><strong style="color:#349feb">${c.sender}:</strong> ${c.msg}</div>`).join('');
             chatList.scrollTop = chatList.scrollHeight;
             localChatLength = state.game.chatLogs.length;
-            wakeUpChat(); // 【唤醒聊天隐身舱】
+            wakeUpChat();
         }
 
         if (myName !== "") {
@@ -812,7 +864,9 @@
             const netClass = netVal > 0 ? 'text-green' : (netVal < 0 ? 'text-red' : '');
             const netStr = netVal > 0 ? `+$${formatMoney(netVal)}` : (netVal < 0 ? `-$${formatMoney(Math.abs(netVal))}` : `$0`);
             const pName = p.name.split('|')[1] || p.name;
-            ledgerBody += `<tr><td style="text-align:left;">${pName}</td><td>$${formatMoney(p.totalBuyIn)}</td><td>$${formatMoney(p.chips)}</td><td class="${netClass}" style="text-align:right;">${netStr}</td></tr>`;
+            // 【房主赋权：净化战绩表数据按钮】
+            let purgeBtn = isHost ? `<button style="background:transparent; border:none; color:#e74c3c; cursor:pointer; font-weight:bold; font-size:16px; padding:0 0 0 10px;" onclick="purgeRecord('${p.name}')" title="抹除此记录">✖</button>` : '';
+            ledgerBody += `<tr><td style="text-align:left;">${pName}</td><td>$${formatMoney(p.totalBuyIn)}</td><td>$${formatMoney(p.chips)}</td><td class="${netClass}" style="text-align:right; white-space:nowrap;">${netStr} ${purgeBtn}</td></tr>`;
         });
         document.getElementById("ledger-tbody").innerHTML = ledgerBody;
 
@@ -823,7 +877,7 @@
         if (state.game.status === "SHOWDOWN") {
             const hasBankrupt = playersArray.some(p => !p.isKicked && p.seatIndex !== -1 && (p.chips === 0 || p.isOut) && !p.isSpectating);
             
-            // 【UI 净化：彻底拆除正则表达式推土机，完美信任后端的红色 HTML 标签】
+            // 【UI 净化：仅剥离红色方块背景推土机，信任后端纯正原码】
             let richMsg = state.game.winMessage;
 
             if (hasBankrupt) {
@@ -927,7 +981,9 @@
 
         const isWinner = (state.game.winnerName === myName);
 
+        // 【生态闭环：分离房主控制台与玩家控制台】
         if (isHost) {
+            document.getElementById('player-panel').classList.add('hidden');
             if (state.game.status === "LOBBY") {
                 document.getElementById('host-panel').classList.add('hidden');
                 document.getElementById('btn-start-draw').classList.remove('hidden');
@@ -942,9 +998,14 @@
                     document.getElementById('btn-pause-refund').classList.add('hidden'); 
                 }
             }
-        } else { 
+        } else if (amISeated) { 
             document.getElementById('host-panel').classList.add('hidden'); 
             document.getElementById('btn-start-draw').classList.add('hidden');
+            document.getElementById('player-panel').classList.remove('hidden');
+        } else {
+            document.getElementById('host-panel').classList.add('hidden'); 
+            document.getElementById('btn-start-draw').classList.add('hidden');
+            document.getElementById('player-panel').classList.add('hidden');
         }
 
         if (myDataRecord && myDataRecord.isKicked) {
@@ -1109,14 +1170,14 @@
         if (amISeated) {
             if (myDataRecord.chips === 0 && (state.game.status === "WAITING" || state.game.status === "SHOWDOWN" || myDataRecord.isOut || myDataRecord.isSpectating)) {
                 buyinConsole.classList.remove("hidden");
-                // 【全景避让，给操作台留足空间】
+                // 【120px 极致避让】
                 tableContainer.style.transform = "translateY(-120px) scale(0.85)";
                 document.getElementById('ui-buyin-amount').innerText = formatMoney(state.game.buyIn || 30);
             } 
             else if (state.game.status !== "WAITING" && state.game.status !== "LOBBY" && state.game.status !== "DRAWING" && state.game.status !== "PICK_SEAT" && state.game.status !== "SHOWDOWN" && !myDataRecord.folded && !myDataRecord.isSpectating && myDataRecord.chips > 0) {
                 if (isMyTurn) {
                     actionConsole.classList.remove("hidden"); 
-                    // 【全景避让，给操作台留足空间】
+                    // 【120px 极致避让】
                     tableContainer.style.transform = "translateY(-120px) scale(0.85)";
                     
                     const currentBet = parseFloat(state.game.currentBet) || 0; const myBet = parseFloat(myDataRecord.betThisRound) || 0; const myChips = parseFloat(myDataRecord.chips) || 0; 

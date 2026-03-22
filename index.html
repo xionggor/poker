@@ -25,7 +25,7 @@
 
         .settings-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; color: #aaa; font-size: 14px; font-weight: bold; cursor: pointer; }
         .settings-header span:hover { color: var(--gold); }
-        .setting-item { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; text-align: left;}
+        .setting-item { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; text-align: left; transition: opacity 0.3s;}
         .setting-label { font-size: 14px; color: #ccc; flex: 1; }
         .setting-input { width: 100px; padding: 8px 12px; border-radius: 6px; background: #1a2028; border: 1px solid #444; color: white; font-size: 14px; font-weight: bold; outline: none; text-align: right; transition: border-color 0.2s; }
         .setting-input option { background-color: var(--panel-bg); color: white; }
@@ -122,7 +122,7 @@
             100% { box-shadow: 0 0 25px rgba(46, 204, 113, 1), inset 0 0 10px rgba(46, 204, 113, 0.5); }
         }
 
-        /* 【神级视觉：你的专属座位高亮】 */
+        /* 【神级视觉：你的专属座位高亮（无徽章版）】 */
         .player-card.my-seat { border-color: #ffd700 !important; box-shadow: 0 0 20px rgba(255, 215, 0, 0.4), inset 0 0 10px rgba(255, 215, 0, 0.2) !important; }
         .player-card.my-seat .player-name { color: #ffd700; font-weight: 900; text-shadow: 0 2px 4px rgba(0,0,0,0.8); font-size: 12px; }
         .player-card.my-seat .player-chips { background: linear-gradient(145deg, #ffd700, #d4b400) !important; color: #000 !important; border-top: 1px solid rgba(255,255,255,0.3); }
@@ -255,19 +255,17 @@
                 <span class="setting-label" style="color:var(--gold);">趣味抽牌选座 (抢庄)</span>
                 <input type="checkbox" id="set-enable-draw" style="width:20px; height:20px; cursor:pointer;">
             </div>
-            
             <div class="setting-item">
                 <span class="setting-label" style="color:#ff9800;">🔥 短牌模式 (Short Deck 6+)</span>
-                <input type="checkbox" id="set-enable-shortdeck" style="width:20px; height:20px; cursor:pointer;">
+                <input type="checkbox" id="set-enable-shortdeck" onchange="toggleTwoSeven('set')" style="width:20px; height:20px; cursor:pointer;">
             </div>
-            
             <div class="setting-item">
                 <span class="setting-label" style="color:#e74c3c;">🦑 鱿鱼生存模式 (Stand Up)</span>
                 <input type="checkbox" id="set-enable-standup" style="width:20px; height:20px; cursor:pointer;">
             </div>
-            <div class="setting-item">
+            <div class="setting-item" id="set-twoseven-container">
                 <span class="setting-label" style="color:#e74c3c;">🧨 2-7 炸鱼赏金 (The 2-7 Bounty)</span>
-                <input type="checkbox" id="set-enable-twoseven" style="width:20px; height:20px; cursor:pointer;" checked>
+                <input type="checkbox" id="set-enable-twoseven" style="width:20px; height:20px; cursor:pointer;">
             </div>
         </div>
     </div>
@@ -281,18 +279,17 @@
             
             <div class="setting-item" style="margin-top:20px;">
                 <span class="setting-label" style="color:#ff9800;">🔥 短牌模式 (6+)</span>
-                <input type="checkbox" id="update-enable-shortdeck" style="width:20px; height:20px; cursor:pointer;">
+                <input type="checkbox" id="update-enable-shortdeck" onchange="toggleTwoSeven('update')" style="width:20px; height:20px; cursor:pointer;">
             </div>
-            
             <div class="setting-item">
                 <span class="setting-label" style="color:#e74c3c;">🦑 鱿鱼生存模式</span>
                 <input type="checkbox" id="update-enable-standup" style="width:20px; height:20px; cursor:pointer;">
             </div>
-            <div class="setting-item">
+            <div class="setting-item" id="update-twoseven-container">
                 <span class="setting-label" style="color:#e74c3c;">🧨 2-7 炸鱼赏金</span>
                 <input type="checkbox" id="update-enable-twoseven" style="width:20px; height:20px; cursor:pointer;">
             </div>
-            <div style="font-size:12px; color:#aaa; margin-bottom:20px; text-align:left;">* 提示：规则修改将在【下一局】正式生效，不影响当前牌局。短牌与2-7炸鱼可组合生效。</div>
+            <div style="font-size:12px; color:#aaa; margin-bottom:20px; text-align:left;">* 提示：规则修改将在【下一局】正式生效。短牌模式下将禁止触发2-7炸鱼。</div>
             <button class="btn-main btn-gold" onclick="submitUpdateSettings()">保存并广播</button>
         </div>
     </div>
@@ -468,6 +465,21 @@
     let winTextPlayed = false;
     let isNextHandSent = false; 
 
+    // 【核心新增：动态互斥锁逻辑】
+    function toggleTwoSeven(prefix) {
+        const isShortDeck = document.getElementById(prefix + '-enable-shortdeck').checked;
+        const tsBox = document.getElementById(prefix + '-enable-twoseven');
+        const tsContainer = document.getElementById(prefix + '-twoseven-container');
+        if(isShortDeck) {
+            tsBox.checked = false;
+            tsBox.disabled = true;
+            tsContainer.style.opacity = '0.4';
+        } else {
+            tsBox.disabled = false;
+            tsContainer.style.opacity = '1';
+        }
+    }
+
     function formatMoney(val) { return parseFloat(Number(val).toFixed(2)); }
     function roundToQuarter(val) { return Math.round(val * 4) / 4; }
 
@@ -605,19 +617,22 @@
         if(latestGameState && latestGameState.game) {
             document.getElementById('update-enable-standup').checked = latestGameState.game.enableStandUp;
             document.getElementById('update-enable-twoseven').checked = latestGameState.game.enableTwoSeven;
-            // 【同步短牌开关状态】
             const shortDeckUI = document.getElementById('update-enable-shortdeck');
-            if(shortDeckUI) shortDeckUI.checked = latestGameState.game.enableShortDeck;
+            if(shortDeckUI) {
+                shortDeckUI.checked = latestGameState.game.enableShortDeck;
+                toggleTwoSeven('update'); // 触发一次 UI 同步
+            }
         }
         document.getElementById('update-settings-modal').classList.remove('hidden');
     }
 
     function submitUpdateSettings() {
         const standUp = document.getElementById('update-enable-standup').checked;
-        const twoSeven = document.getElementById('update-enable-twoseven').checked;
-        // 【获取短牌修改意图】
         const shortDeckUI = document.getElementById('update-enable-shortdeck');
         const shortDeck = shortDeckUI ? shortDeckUI.checked : false;
+        
+        // 如果开启了短牌，强制将传给云端的 twoSeven 设为 false
+        const twoSeven = shortDeck ? false : document.getElementById('update-enable-twoseven').checked;
         
         send({type: 'UPDATE_SETTINGS', name: myName, settings: { enableStandUp: standUp, enableTwoSeven: twoSeven, enableShortDeck: shortDeck }});
         document.getElementById('update-settings-modal').classList.add('hidden');
@@ -635,10 +650,11 @@
             const botLevel = parseInt(document.getElementById('set-bot-level').value) || 1;
             const enableDraw = document.getElementById('set-enable-draw').checked;
             const enableStandUp = document.getElementById('set-enable-standup').checked;
-            const enableTwoSeven = document.getElementById('set-enable-twoseven').checked;
-            // 【创建房间时获取短牌选项】
             const shortDeckUI = document.getElementById('set-enable-shortdeck');
             const enableShortDeck = shortDeckUI ? shortDeckUI.checked : false;
+            
+            // 如果开启了短牌，强制将传给云端的 twoSeven 设为 false
+            const enableTwoSeven = enableShortDeck ? false : document.getElementById('set-enable-twoseven').checked;
 
             creatorSettings = { 
                 initialChips: buyInVal, smallBlind: sb, bigBlind: sb * 2,
@@ -741,7 +757,6 @@
         if (elBuyin) elBuyin.innerText = formatMoney(state.game.buyIn || 30);
         if (elBlinds) elBlinds.innerText = `${formatMoney(state.game.smallBlind || 0.25)}/${formatMoney(state.game.bigBlind || 0.50)}`;
 
-        // 【短牌模式桌面标识】
         let potPrefix = state.game.enableShortDeck ? `<span style="color:#ff9800; font-size:10px;">[短牌6+] </span>` : "";
         document.getElementById("ui-pot").innerHTML = potPrefix + "$" + formatMoney(state.game.pot);
         
@@ -815,7 +830,7 @@
                     </div>
                 `;
             } else {
-                // 【核心升级：10 秒黄金倒计时，且权限封锁！】
+                // 【核心升级：10秒倒数，且防重复发送锁】
                 if (!countdownInterval && !isNextHandSent) {
                     let timeLeft = 10;
                     countdownInterval = setInterval(() => {
@@ -977,7 +992,6 @@
                 const isOffline = p.isOnline === false; 
                 const isSpectating = p.isSpectating === true;
                 
-                // 【核心视觉：千人千面，本尊专属高亮】
                 const isMySeat = (p.name === myName);
                 
                 const isDealer = (p.seatIndex === state.game.dealerIndex && state.game.status !== "WAITING" && !isSpectating);

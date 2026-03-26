@@ -1,0 +1,834 @@
+// src/index.js
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    if (request.method === "OPTIONS") return new Response(null, { headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type" } });
+    if (url.pathname === "/create-room" && request.method === "POST") {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let shortCode = '';
+      for(let i=0; i<5; i++) shortCode += chars.charAt(Math.floor(Math.random() * chars.length));
+      return new Response(JSON.stringify({ roomId: shortCode }), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+    }
+    if (request.headers.get("Upgrade") === "websocket") {
+      const roomId = url.searchParams.get("roomId");
+      if (!roomId) return new Response("Missing roomId", { status: 400 });
+      try { return env.POKER_ROOM.get(env.POKER_ROOM.idFromName(roomId)).fetch(request); } 
+      catch (e) { return new Response("Invalid Room ID", { status: 400 }); }
+    }
+    return new Response("Poker Server V38.5 - Strict Profit StandUp Engine");
+  }
+};
+
+export class PokerRoom {
+  constructor(state, env) {
+    this.sessions = [];
+    this.socketToName = new Map();
+    this.players = [];
+    this.game = { 
+        status: "WAITING", pot: 0, currentBet: 0, board: [], deck: [], burnCards: [],
+        turnIndex: -1, dealerIndex: -1, sbIndex: -1, bbIndex: -1, 
+        smallBlind: 0.25, bigBlind: 0.50, buyIn: 30,
+        winMessage: "", hostName: "", botLevel: 1, botCounter: 0,
+        enableDraw: false, enableStandUp: false, standUpPenalty: 1, enableTwoSeven: false,
+        enableShortDeck: false,
+        logs: [], logVersion: 0, drawingCards: [], winnerName: "", handCount: 0, lastValidRaise: 0.50,
+        uncontestedWinner: "", chatLogs: []
+    };
+  }
+
+  addLog(msg) {
+    this.game.logs.push(msg);
+    this.game.logVersion++; 
+    if(this.game.logs.length > 60) this.game.logs.shift();
+  }
+
+  triggerBroadcast(theme, htmlMsg) {
+      this.sessions.forEach(s => {
+          try { s.send(JSON.stringify({ type: "BROADCAST", theme: theme, html: htmlMsg })); } catch(e){}
+      });
+  }
+
+  async fetch(request) {
+    const pair = new WebSocketPair();
+    const [client, server] = Object.values(pair);
+    this.sessions.push(server);
+    server.addEventListener('message', async event => {
+      try { 
+        const data = JSON.parse(event.data);
+        if (data.type === "JOIN") this.socketToName.set(server, data.name);
+        await this.handleAction(server, data); 
+      } catch (e) { console.log(e); }
+    });
+    server.addEventListener('close', () => this.handleDisconnect(server));
+    server.addEventListener('error', () => this.handleDisconnect(server));
+    server.accept();
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  handleDisconnect(server) {
+      const playerName = this.socketToName.get(server);
+      this.sessions = this.sessions.filter(s => s !== server);
+      this.socketToName.delete(server);
+      if (playerName) {
+          setTimeout(() => {
+              if (!this.isPlayerSocketActive(playerName)) {
+                  const p = this.players.find(p => p.name === playerName);
+                  if (p) { p.isOnline = false; this.broadcastState(); }
+              }
+          }, 3000);
+      }
+  }
+
+  isPlayerSocketActive(playerName) {
+      for (let name of this.socketToName.values()) { if (name === playerName) return true; }
+      return false;
+  }
+
+  async handleAction(socket, data) {
+    if (data.type === "PING") { return; }
+    else if (data.type === "JOIN") {
+      if (data.settings && this.players.length === 0) {
+          this.game.buyIn = data.settings.initialChips;
+          this.game.smallBlind = data.settings.smallBlind;
+          this.game.bigBlind = data.settings.bigBlind;
+          this.game.botLevel = data.settings.botLevel;
+          this.game.enableDraw = data.settings.enableDraw || false;
+          this.game.enableStandUp = data.settings.enableStandUp || false;
+          this.game.standUpPenalty = data.settings.standUpPenalty || 1;
+          this.game.enableTwoSeven = data.settings.enableTwoSeven || false;
+          this.game.enableShortDeck = data.settings.enableShortDeck || false; 
+          this.game.lastValidRaise = data.settings.bigBlind;
+          if (this.game.enableDraw) this.game.status = "LOBBY";
+      }
+      
+      const reqNamePart = data.name.split('|')[1] || data.name;
+      let p = this.players.find(player => (player.name.split('|')[1] || player.name) === reqNamePart);
+      if (!p) {
+        let isMidGame = this.game.status !== "WAITING" && this.game.status !== "LOBBY";
+        let seatIdx = -1;
+        
+        if (!isMidGame && (!this.game.enableDraw || this.game.status !== "LOBBY")) {
+            for(let i=0; i<10; i++) {
+                if (!this.players.some(x => x.seatIndex === i && !x.isKicked)) { seatIdx = i; break; }
+            }
+        }
+
+        this.players.push({ 
+            id: crypto.randomUUID(), name: data.name, seatIndex: seatIdx, 
+            chips: this.game.buyIn, totalBuyIn: this.game.buyIn, investedThisHand: 0,
+            hand: [], folded: isMidGame, betThisRound: 0, actedThisRound: isMidGame, 
+            isOut: false, winAmount: 0, isOnline: true, isWaitingNextHand: isMidGame, isKicked: false,
+            isSpectating: (seatIdx === -1), isBot: false, drawCard: null, hasShownCards: false, 
+            isStanding: true, 
+            isWinner: false
+        });
+
+        if (this.players.filter(x => !x.isBot && !x.isKicked).length === 1) this.game.hostName = data.name;
+        if (seatIdx === -1) this.addLog(`🚪 ${reqNamePart} 进入了候场区`);
+        else this.addLog(`🚪 ${reqNamePart} 坐下了`);
+
+      } else {
+        p.name = data.name; p.isOnline = true; p.isKicked = false;
+      }
+    }
+    else if (data.type === "TAKE_SEAT") {
+        let p = this.players.find(x => x.name === data.name);
+        let isMidGame = this.game.status !== "WAITING" && this.game.status !== "LOBBY";
+        if (p && p.seatIndex === -1) {
+            let seatIdx = -1;
+            for(let i=0; i<10; i++) {
+                if (!this.players.some(x => x.seatIndex === i && !x.isKicked)) { seatIdx = i; break; }
+            }
+            if (seatIdx !== -1) {
+                p.seatIndex = seatIdx;
+                p.isOut = isMidGame;
+                p.isSpectating = false;
+                p.folded = isMidGame;
+                p.actedThisRound = isMidGame;
+                p.isWaitingNextHand = isMidGame;
+                p.isStanding = true; 
+                this.addLog(`🪑 ${p.name.split('|')[1]} 坐下了，将在下一局加入对战`);
+            }
+        }
+    }
+    else if (data.type === "CHAT") {
+        if (!this.game.chatLogs) this.game.chatLogs = [];
+        const senderName = data.name.split('|')[1] || data.name;
+        this.game.chatLogs.push({ sender: senderName, msg: data.msg });
+        if (this.game.chatLogs.length > 50) this.game.chatLogs.shift();
+        this.broadcastState();
+    }
+    else if (data.type === "UPDATE_SETTINGS") {
+        let p = this.players.find(x => x.name === data.name);
+        if (p && (this.game.hostName === data.name || this.game.hostName === "")) {
+            if (data.settings) {
+                this.game.enableStandUp = data.settings.enableStandUp;
+                this.game.standUpPenalty = data.settings.standUpPenalty || 1;
+                this.game.enableTwoSeven = data.settings.enableTwoSeven;
+                this.game.enableShortDeck = data.settings.enableShortDeck;
+                this.addLog(`📢 <span style="color:var(--gold);"><strong>房主已更新规则：</strong> 鱿鱼模式 [${this.game.enableStandUp ? '已开启':'已关闭'}] | 罚金 [$${this.game.standUpPenalty}] | 短牌模式 [${this.game.enableShortDeck ? '已开启':'已关闭'}]</span>`);
+            }
+        }
+    }
+    else if (data.type === "PAUSE_REFUND" && data.name === this.game.hostName) {
+        if (this.game.status !== "WAITING" && this.game.status !== "LOBBY") {
+            let totalRefunded = 0;
+            this.players.forEach(p => {
+                if (p.investedThisHand > 0) {
+                    p.chips = parseFloat((p.chips + p.investedThisHand).toFixed(2));
+                    totalRefunded += p.investedThisHand;
+                    p.investedThisHand = 0;
+                }
+                p.betThisRound = 0; p.hand = []; p.folded = false; 
+                p.actedThisRound = false; p.isWinner = false; p.hasShownCards = false;
+            });
+            this.game.status = "WAITING"; this.game.uncontestedWinner = "";
+            this.game.pot = 0; this.game.currentBet = 0; this.game.board = []; this.game.burnCards = [];
+            this.game.winMessage = "房主已中止对局，所有下注已退还";
+            this.addLog(`<div style="color:#e74c3c; font-weight:bold; padding:8px; background:rgba(231,76,60,0.2); border-radius:8px;">🛑 房主中止了牌局，本局所有盲注和下注已全额退还至玩家筹码。</div>`);
+        }
+    }
+    else if (data.type === "PURGE_RECORD" && data.name === this.game.hostName) {
+        this.players = this.players.filter(p => p.name !== data.targetName);
+        this.addLog(`🗑️ 房主清除了玩家 ${data.targetName.split('|')[1] || data.targetName} 的战绩数据`);
+    }
+    else if (data.type === "LEAVE_SEAT") {
+        let p = this.players.find(x => x.name === data.name);
+        if (p && p.seatIndex !== -1) {
+            if (!p.folded && this.game.status !== "WAITING" && this.game.status !== "LOBBY" && this.game.status !== "SHOWDOWN") {
+                await this.processPlayerAction(p, "FOLD", 0);
+            }
+            p.seatIndex = -1;
+            p.isSpectating = true;
+            p.isOut = true;
+            this.addLog(`🚶 ${p.name.split('|')[1]} 离开了座位，进入观看席`);
+        }
+    }
+    else if (data.type === "EXIT_GAME") {
+        let p = this.players.find(x => x.name === data.name);
+        if (p) {
+            if (p.seatIndex !== -1 && !p.folded && this.game.status !== "WAITING" && this.game.status !== "LOBBY" && this.game.status !== "SHOWDOWN") {
+                await this.processPlayerAction(p, "FOLD", 0);
+            }
+            p.seatIndex = -1;
+            p.isSpectating = true;
+            p.isOut = true;
+            p.isOnline = false;
+            this.addLog(`🚪 ${p.name.split('|')[1]} 退出了房间`);
+        }
+    }
+    else if (data.type === "ADD_BOT" && data.name === this.game.hostName) {
+        const activeCount = this.players.filter(p => !p.isKicked).length;
+        if (activeCount < 10) {
+            let isMidGame = this.game.status !== "WAITING" && this.game.status !== "LOBBY";
+            let targetSeat = data.seatIndex;
+            if (this.game.enableDraw && this.game.status === "LOBBY") { targetSeat = -1; }
+            else if (targetSeat >= 0) {
+                if (this.players.some(x => x.seatIndex === targetSeat && !x.isKicked)) return;
+                this.players = this.players.filter(x => !(x.seatIndex === targetSeat && x.isKicked));
+            }
+            this.game.botCounter++;
+            let nameStr = `🤖|Bot_${this.game.botCounter}`;
+            this.players.push({
+                id: crypto.randomUUID(), name: nameStr, seatIndex: targetSeat,
+                chips: this.game.buyIn, totalBuyIn: this.game.buyIn, investedThisHand: 0,
+                hand: [], folded: isMidGame, betThisRound: 0, actedThisRound: isMidGame,
+                isOut: false, winAmount: 0, isOnline: true, isWaitingNextHand: isMidGame, isKicked: false,
+                isSpectating: false, isBot: true, drawCard: null, hasShownCards: false, 
+                isStanding: true, 
+                isWinner: false
+            });
+            this.addLog(`🔧 房主添加了机器人 ${nameStr.split('|')[1]}`);
+        }
+    }
+    else if (data.type === "START_DRAW" && data.name === this.game.hostName) {
+        this.game.status = "DRAWING";
+        const count = this.players.filter(p => !p.isKicked).length;
+        let deck = this.createDeck();
+        this.game.drawingCards = Array(count).fill({ faceUp: false, card: null });
+        this.players.forEach(p => { if(!p.isKicked) p.drawCard = null; });
+        this.addLog(`🃏 房主发起了抽牌选座！大家请各选一张扑克`);
+        
+        this.players.filter(p => p.isBot && !p.isKicked).forEach((p, i) => {
+            let card = deck.pop(); p.drawCard = card;
+            this.game.drawingCards[i] = { faceUp: true, card: card, playerName: p.name };
+        });
+        if (this.players.filter(x => !x.isKicked && !x.drawCard).length === 0) this.finishDrawing();
+    }
+    else if (data.type === "PICK_DRAW_CARD") {
+        let p = this.players.find(x => x.name === data.name);
+        if (p && !p.drawCard && this.game.status === "DRAWING") {
+            let deck = this.createDeck();
+            let used = this.players.map(x => x.drawCard).filter(x => x);
+            let available = deck.filter(c => !used.includes(c));
+            let card = available[Math.floor(Math.random() * available.length)];
+            p.drawCard = card;
+            let idx = this.game.drawingCards.findIndex(c => !c.faceUp);
+            if (idx !== -1) { this.game.drawingCards[idx] = { faceUp: true, card: card, playerName: p.name }; }
+            if (this.players.filter(x => !x.isKicked && !x.drawCard).length === 0) this.finishDrawing();
+        }
+    }
+    else if (data.type === "SELECT_SEAT" && data.name === (this.game.winnerName || this.game.hostName)) {
+        this.processSeatSelection(data.seatIndex);
+    }
+    else if (data.type === "BUY_IN") {
+        const p = this.players.find(player => player.name === data.name);
+        if (p) {
+            p.chips += this.game.buyIn; p.totalBuyIn += this.game.buyIn; 
+            if(p.isOut || p.isSpectating) { p.isOut = false; p.isSpectating = false; p.folded = false; }
+            this.addLog(`💰 ${p.name.split('|')[1] || p.name} 补充了 $${this.game.buyIn}`);
+        }
+    }
+    else if (data.type === "KICK" && data.name === this.game.hostName) {
+        const p = this.players.find(p => p.name === data.targetName);
+        if (p) {
+            p.isKicked = true; p.chips = 0; p.seatIndex = -1;
+            this.addLog(`🚷 ${p.name.split('|')[1] || p.name} 被移出对局/候场区`);
+            if (this.game.status !== "WAITING" && this.game.status !== "LOBBY") await this.advanceTurnOrPhase();
+        }
+    }
+    else if (data.type === "START_GAME" && data.name === this.game.hostName) {
+        let activePlayers = this.players.filter(p => p.chips > 0 && !p.isKicked && p.seatIndex !== -1);
+        if (activePlayers.length >= 2) {
+            if (this.game.dealerIndex === -1) {
+                let validSeats = activePlayers.map(p => p.seatIndex);
+                this.game.dealerIndex = validSeats[Math.floor(Math.random() * validSeats.length)];
+            }
+            this.startNewHand();
+        }
+    }
+    else if (data.type === "ACTION") {
+      const p = this.players.find(x => x.seatIndex === this.game.turnIndex);
+      if (p && p.name === data.name && !p.isBot) await this.processPlayerAction(p, data.action, data.amount);
+    }
+    else if (data.type === "SHOW_CARDS") {
+      const p = this.players.find(x => x.name === data.name);
+      if (p && this.game.status === "SHOWDOWN" && !p.hasShownCards) {
+          p.hasShownCards = true;
+          const handStr = p.hand.join(' ');
+          
+          let rankName = "";
+          if (!p.folded) {
+              const fullHand = [...p.hand, ...this.game.board].map(c => this.parseCard(c));
+              let rankData = this.calculateHandRank(fullHand, p.hand);
+              rankName = ` - [${rankData.name}]`; 
+          }
+
+          let actionText = p.folded ? "展示了弃牌" : "不服气地亮出了底牌";
+          if (this.game.uncontestedWinner === p.name) actionText = "霸气地翻开了底牌";
+
+          this.addLog(`👀 <span style="color:var(--gold);"><strong>[${p.name.split('|')[1]}]</strong> ${actionText}: <strong>[${handStr}]</strong>${rankName}</span>`);
+
+          if (this.game.enableTwoSeven && !this.game.enableShortDeck && this.game.uncontestedWinner === p.name) {
+              let ranks = p.hand.map(c => this.parseCard(c).rank);
+              if (ranks.includes(2) && ranks.includes(7)) {
+                  let bountyTotal = 0;
+                  this.players.forEach(other => {
+                      if (other.name !== p.name && !other.isKicked && !other.isSpectating && other.seatIndex !== -1) {
+                          let deduction = Math.max(0, Math.min(1, other.chips)); 
+                          other.chips = parseFloat((other.chips - deduction).toFixed(2));
+                          bountyTotal += deduction;
+                      }
+                  });
+                  bountyTotal = parseFloat(bountyTotal.toFixed(2));
+                  if (bountyTotal > 0) {
+                      p.chips = parseFloat((p.chips + bountyTotal).toFixed(2));
+                      p.winAmount = parseFloat(((p.winAmount || 0) + bountyTotal).toFixed(2));
+                      this.addLog(`🧨 <strong style="color:#e74c3c;">[2-7 炸鱼成功]</strong> ${p.name.split('|')[1]} 赢得了全桌罚金 $${bountyTotal}！`);
+                      this.triggerBroadcast('bounty', `🧨 炸鱼狂欢！<span class="highlight">【${p.name.split('|')[1]}】</span> 手握 2-7 绝杀，狂揽全桌罚金 <span class="highlight">$${bountyTotal}</span>！`);
+                  }
+              }
+          }
+      }
+    }
+    else if (data.type === "NEXT_HAND" && data.name === this.game.hostName) { 
+        if (this.game.status === "SHOWDOWN") {
+            let activePlayers = this.players.filter(p => p.chips > 0 && !p.isKicked && p.seatIndex !== -1);
+            if (activePlayers.length >= 2) {
+                this.startNewHand();
+            } else {
+                this.game.status = "WAITING"; this.game.uncontestedWinner = "";
+                this.game.board = []; this.game.burnCards = [];
+                this.players.forEach(p => { 
+                    p.hand = []; p.betThisRound = 0; p.investedThisHand = 0; 
+                    p.folded = false; p.actedThisRound = false; p.winAmount = 0; 
+                    p.isSpectating = (p.chips === 0); p.isStanding = false; p.isWinner = false;
+                });
+                this.addLog(`<div style="color:#e74c3c;">⚠️ 存活玩家不足两人，退回等待阶段</div>`);
+            }
+        } 
+    }
+    
+    this.broadcastState();
+  }
+
+  processSeatSelection(startSeat) {
+      let sorted = this.players.filter(p => !p.isKicked && p.drawCard).sort((a,b) => this.getDrawScore(b.drawCard) - this.getDrawScore(a.drawCard));
+      sorted.forEach((p, i) => { p.seatIndex = (startSeat + i) % 10; p.isSpectating = false; p.isWaitingNextHand = true; p.folded = false; });
+      this.game.status = "WAITING"; 
+      this.game.dealerIndex = startSeat; 
+      this.addLog(`🎉 选座完成！所有玩家已顺时针落座`);
+  }
+
+  finishDrawing() {
+      let sorted = this.players.filter(p => !p.isKicked && p.drawCard).sort((a,b) => this.getDrawScore(b.drawCard) - this.getDrawScore(a.drawCard));
+      let winner = sorted[0]; this.game.winnerName = winner.name; this.game.status = "PICK_SEAT";
+      this.addLog(`🏆 ${winner.name.split('|')[1]} 抽到了最大的 [${winner.drawCard}]，正在选座...`);
+      if (winner.isBot) {
+          setTimeout(() => {
+              if (this.game.status === "PICK_SEAT" && this.game.winnerName === winner.name) {
+                  this.processSeatSelection(Math.floor(Math.random() * 10));
+                  this.broadcastState();
+              }
+          }, 2000);
+      }
+  }
+
+  getDrawScore(str) {
+      const suits = {'♠': 4, '♥': 3, '♣': 2, '♦': 1};
+      const ranks = {'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'10':10,'J':11,'Q':12,'K':13,'A':14};
+      return ranks[str.slice(0, -1)] * 10 + suits[str.slice(-1)];
+  }
+
+  createDeck() {
+    const suits = ['♠', '♥', '♣', '♦'];
+    let values = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+    if (this.game.enableShortDeck) {
+        values = ['6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+    }
+    let deck = []; suits.forEach(s => values.forEach(v => deck.push(v + s))); return deck.sort(() => Math.random() - 0.5);
+  }
+  
+  parseCard(str) { 
+      if(!str || str.length < 2) return {suit:'♠', rank:2, str: str||''};
+      const suit = str.slice(-1); const valStr = str.slice(0, -1); const ranks = {'J':11, 'Q':12, 'K':13, 'A':14}; 
+      return { suit, rank: ranks[valStr] || parseInt(valStr) || 2, str }; 
+  }
+  
+  startNewHand() {
+    this.game.status = "PRE-FLOP"; this.game.uncontestedWinner = ""; 
+    this.game.board = []; this.game.burnCards = []; this.game.deck = this.createDeck(); this.game.handCount++;
+    this.game.lastValidRaise = this.game.bigBlind; 
+
+    this.players.forEach(p => { 
+        if(p.chips <= 0 && p.seatIndex !== -1) { p.isOut = true; p.isSpectating = true; p.folded = true; } 
+        else { p.isOut = false; p.isSpectating = false; }
+    });
+    
+    if (this.game.enableStandUp) {
+        let seatedPlayers = this.players.filter(p => !p.isKicked && p.seatIndex !== -1 && !p.isSpectating && p.chips > 0);
+        let standingCount = seatedPlayers.filter(p => p.isStanding).length;
+        if (standingCount <= 1) { 
+            seatedPlayers.forEach(p => p.isStanding = true);
+            this.addLog(`<div style="color:#e74c3c; font-weight:bold; margin-top:8px;">🦑 新一轮【鱿鱼生存游戏】开始！所有人强制起立（卡片变黑）！</div>`);
+        }
+    }
+
+    this.game.dealerIndex = this.getNextActiveSeat(this.game.dealerIndex, false);
+    const activeCount = this.players.filter(p => p.chips > 0 && p.seatIndex !== -1 && !p.isKicked).length;
+    
+    this.players.forEach(p => { 
+        p.betThisRound = 0; p.investedThisHand = 0; p.actedThisRound = false; p.winAmount = 0; 
+        p.hasShownCards = false; p.isWinner = false;
+        if(p.seatIndex !== -1 && p.chips > 0 && !p.isKicked) { p.folded = false; p.hand = [this.game.deck.pop(), this.game.deck.pop()]; }
+        else { p.folded = true; p.hand = []; }
+    });
+
+    let sbIndex, bbIndex, firstActorIndex;
+
+    if (activeCount === 2) {
+        sbIndex = this.game.dealerIndex;
+        bbIndex = this.getNextActiveSeat(sbIndex, false);
+        firstActorIndex = sbIndex;
+    } else {
+        sbIndex = this.getNextActiveSeat(this.game.dealerIndex, false); 
+        bbIndex = this.getNextActiveSeat(sbIndex, false);
+        firstActorIndex = this.getNextActiveSeat(bbIndex, false); 
+    }
+
+    this.game.sbIndex = sbIndex;
+    this.game.bbIndex = bbIndex;
+
+    const sbP = this.players.find(x => x.seatIndex === sbIndex); 
+    const bbP = this.players.find(x => x.seatIndex === bbIndex);
+    
+    let actualSb = Math.max(0, Math.min(sbP.chips, this.game.smallBlind));
+    let actualBb = Math.max(0, Math.min(bbP.chips, this.game.bigBlind));
+
+    sbP.chips = parseFloat((sbP.chips - actualSb).toFixed(2));
+    sbP.betThisRound = parseFloat(actualSb.toFixed(2));
+    sbP.investedThisHand = parseFloat(actualSb.toFixed(2));
+
+    bbP.chips = parseFloat((bbP.chips - actualBb).toFixed(2));
+    bbP.betThisRound = parseFloat(actualBb.toFixed(2));
+    bbP.investedThisHand = parseFloat(actualBb.toFixed(2));
+
+    this.game.currentBet = this.game.bigBlind;
+    this.game.turnIndex = firstActorIndex;
+    
+    this.addLog(`<div style="margin-top:15px; padding-top:10px; border-top:1px dashed #555; color:var(--gold); text-align:center; font-weight:bold;">--- 第 ${this.game.handCount} 局 ---</div>`);
+    this.addLog(`🔹 ${sbP.name.split('|')[1]} 下小盲注 $${actualSb}`);
+    this.addLog(`🔸 ${bbP.name.split('|')[1]} 下大盲注 $${actualBb}`);
+    this.broadcastState(); this.checkAndTriggerBot();
+  }
+
+  getNextActiveSeat(startIndex, needChips) {
+    let idx = (startIndex + 1) % 10;
+    for(let i=0; i<10; i++) {
+        let p = this.players.find(x => x.seatIndex === idx && !x.isKicked);
+        if (p && !p.isOut && !p.folded && (!needChips || p.chips > 0)) return idx;
+        idx = (idx + 1) % 10;
+    }
+    return startIndex;
+  }
+
+  async processPlayerAction(player, actionType, amount) {
+    player.actedThisRound = true;
+    const sName = player.name.split('|')[1] || player.name;
+
+    if (actionType === "FOLD") { 
+        player.folded = true; this.addLog(`❌ <span style="color:#aaa;">${sName} 弃牌</span>`); 
+    }
+    else if (actionType === "CALL") {
+        let callAmt = Math.max(0, Math.min(player.chips, this.game.currentBet - player.betThisRound));
+        
+        player.chips = parseFloat((player.chips - callAmt).toFixed(2)); 
+        player.betThisRound = parseFloat((player.betThisRound + callAmt).toFixed(2)); 
+        player.investedThisHand = parseFloat((player.investedThisHand + callAmt).toFixed(2));
+        
+        if (callAmt === 0) this.addLog(`✊ <span style="color:#2ecc71;">${sName} 过牌</span>`);
+        else if (player.chips === 0) this.addLog(`🔥 <strong>${sName} 全押 (ALL-IN) $${callAmt}</strong>`);
+        else this.addLog(`🪙 ${sName} 跟注 $${callAmt}`);
+    } 
+    else if (actionType === "RAISE") {
+        let raiseTotal = this.game.currentBet + amount;
+        let addAmt = Math.max(0, Math.min(player.chips, raiseTotal - player.betThisRound));
+        let actualRaiseTotal = player.betThisRound + addAmt;
+        let raiseDelta = actualRaiseTotal - this.game.currentBet;
+        
+        if (player.chips > addAmt && raiseDelta < this.game.lastValidRaise) { return; }
+
+        player.chips = parseFloat((player.chips - addAmt).toFixed(2));
+        player.betThisRound = parseFloat((player.betThisRound + addAmt).toFixed(2));
+        player.investedThisHand = parseFloat((player.investedThisHand + addAmt).toFixed(2));
+        this.game.currentBet = player.betThisRound;
+
+        if (player.chips === 0) this.addLog(`🔥 <strong>${sName} 全押 (ALL-IN) 至 $${this.game.currentBet}</strong>`);
+        else this.addLog(`📈 <span style="color:var(--gold);">${sName} 加注至 $${this.game.currentBet}</span>`);
+
+        if (raiseDelta >= this.game.lastValidRaise) {
+            this.game.lastValidRaise = raiseDelta; 
+            this.players.forEach(x => { if(x !== player && !x.folded && x.chips > 0) x.actedThisRound = false; });
+        } else {
+            this.addLog(`⚠️ <span style="color:#aaa;font-size:11px;">(短筹码All-in不解冻行动权)</span>`);
+        }
+    }
+    await this.advanceTurnOrPhase();
+  }
+
+  async advanceTurnOrPhase() {
+    const active = this.players.filter(p => !p.folded && !p.isKicked && p.seatIndex !== -1);
+    if (active.length === 1) { this.awardSingle(active[0]); return; }
+    
+    const allSettled = active.every(p => p.chips === 0 || p.betThisRound === this.game.currentBet);
+    const everyoneActed = active.every(p => p.chips === 0 || p.actedThisRound);
+    
+    if (allSettled && (everyoneActed || active.filter(p => p.chips > 0).length <= 1)) {
+        this.players.forEach(p => { 
+            this.game.pot = parseFloat((this.game.pot + p.betThisRound).toFixed(2)); 
+            p.betThisRound = 0; p.actedThisRound = false; 
+        });
+        this.game.currentBet = 0;
+        this.game.lastValidRaise = this.game.bigBlind; 
+        
+        if (this.game.status === "PRE-FLOP") { 
+            this.game.status = "FLOP"; this.game.board.push(this.game.deck.pop(), this.game.deck.pop(), this.game.deck.pop()); 
+            this.addLog(`<div style="color:#349feb; margin-top:8px;">--- 翻牌圈 (FLOP) ---<br>[${this.game.board.join('] [')}]</div>`);
+        }
+        else if (this.game.status === "FLOP") { 
+            this.game.status = "TURN"; this.game.board.push(this.game.deck.pop()); 
+            this.addLog(`<div style="color:#349feb; margin-top:8px;">--- 转牌圈 (TURN) ---<br>[${this.game.board.join('] [')}]</div>`);
+        }
+        else if (this.game.status === "TURN") { 
+            this.game.status = "RIVER"; this.game.board.push(this.game.deck.pop()); 
+            this.addLog(`<div style="color:#349feb; margin-top:8px;">--- 河牌圈 (RIVER) ---<br>[${this.game.board.join('] [')}]</div>`);
+        }
+        else { 
+            try { this.evaluateShowdown(active); } catch(err) { this.addLog(`<div style="color:red;">结算异常</div>`); this.game.status = "SHOWDOWN"; this.broadcastState(); }
+            return; 
+        }
+        
+        if (active.filter(p => p.chips > 0).length <= 1) { this.broadcastState(); await new Promise(r => setTimeout(r, 1500)); return this.advanceTurnOrPhase(); }
+        this.game.turnIndex = this.getNextActiveSeat(this.game.dealerIndex, true);
+    } else { 
+        this.game.turnIndex = this.getNextActiveSeat(this.game.turnIndex, true); 
+    }
+    this.broadcastState(); this.checkAndTriggerBot();
+  }
+
+  checkStandUpEnd() {
+    if (!this.game.enableStandUp) return;
+    let seatedPlayers = this.players.filter(p => !p.isKicked && p.seatIndex !== -1 && !p.isSpectating && p.chips > 0);
+    let standingPlayers = seatedPlayers.filter(p => p.isStanding);
+    
+    if (standingPlayers.length === 1 && seatedPlayers.length > 1) {
+        let loser = standingPlayers[0];
+        let winners = seatedPlayers.filter(p => p !== loser);
+        let payoutTotal = 0;
+        let penaltyPerWinner = this.game.standUpPenalty || 1;
+
+        if (winners.length > 0 && loser.chips > 0) {
+            let totalRequired = penaltyPerWinner * winners.length;
+
+            if (loser.chips < totalRequired) {
+                penaltyPerWinner = loser.chips / winners.length;
+                penaltyPerWinner = Math.floor(penaltyPerWinner * 100) / 100;
+            }
+
+            if (penaltyPerWinner > 0) {
+                let totalDeducted = 0;
+                winners.forEach(p => {
+                    p.chips = parseFloat((p.chips + penaltyPerWinner).toFixed(2));
+                    p.winAmount = parseFloat(((p.winAmount || 0) + penaltyPerWinner).toFixed(2));
+                    totalDeducted += penaltyPerWinner;
+                });
+                loser.chips = parseFloat((Math.max(0, loser.chips - totalDeducted)).toFixed(2));
+                payoutTotal = parseFloat(totalDeducted.toFixed(2));
+            }
+        }
+
+        if (payoutTotal > 0) {
+            let winnerNames = winners.map(w => w.name.split('|')[1] || w.name).join(', ');
+            let loserName = loser.name.split('|')[1] || loser.name;
+            
+            this.addLog(`<div style="padding:10px; background:rgba(231,76,60,0.2); border:1px solid #e74c3c; border-radius:8px; margin-top:10px;">
+                <strong style="color:#e74c3c; font-size:16px;">🚨 鱿鱼生存游戏结束！</strong><br>
+                <span style="color:white;">[${loserName}] 成为最后一名水鬼！向全桌支付了总罚金 $${payoutTotal.toFixed(2)}！</span><br>
+                <span style="color:#aaa; font-size:12px;">*(明细：分别向 ${winnerNames} 每人支付了 $${penaltyPerWinner.toFixed(2)})*</span>
+            </div>`);
+
+            this.triggerBroadcast('squid', `🚨 鱿鱼处刑！<span class="highlight">【${loserName}】</span> 成为最后一名水鬼，惨痛支付 <span class="highlight">$${payoutTotal.toFixed(2)}</span>！`);
+        }
+    }
+  }
+
+  awardSingle(w) {
+    let total = parseFloat(this.players.reduce((s,p) => s + p.investedThisHand, 0).toFixed(2));
+    w.chips = parseFloat((w.chips + total).toFixed(2)); w.winAmount = total;
+    w.isStanding = false; 
+    w.isWinner = true; 
+    
+    this.game.uncontestedWinner = w.name;
+    this.game.winMessage = `🚀 ${w.name.split('|')[1]} 赢得 $${total} (其余弃牌)`;
+    this.addLog(`<div style="color:var(--gold); margin-top:8px;">${this.game.winMessage}</div>`);
+    this.players.forEach(p => p.investedThisHand = 0);
+    this.game.status = "SHOWDOWN"; 
+    
+    this.checkStandUpEnd(); 
+    this.broadcastState();
+  }
+
+  calculateHandRank(cards, holeCards = []) {
+      const isShort = this.game.enableShortDeck;
+      if(!cards || cards.length === 0) return { value: 0, name: "高牌", cardsStr: "" };
+      cards.sort((a, b) => b.rank - a.rank);
+      let counts = {}; cards.forEach(c => counts[c.rank] = (counts[c.rank] || 0) + 1);
+      let quads = [], trips = [], pairs = [], singles = [];
+      for (let r=14; r>=2; r--) {
+          if (counts[r] === 4) quads.push(r);
+          else if (counts[r] === 3) trips.push(r);
+          else if (counts[r] === 2) pairs.push(r);
+          else if (counts[r] === 1) singles.push(r);
+      }
+      const getScore = (type, ranks) => { let score = type << 20; for(let i=0; i<5; i++) score |= (ranks[i] || 0) << (16 - i*4); return score; };
+      
+      let flushCards = []; let suits = {'♠':[],'♥':[],'♣':[],'♦':[]}; 
+      cards.forEach(c => suits[c.suit].push(c));
+      for (let s in suits) { if (suits[s].length >= 5) { flushCards = suits[s]; break; } }
+      
+      const checkStraight = (arr) => {
+          let u = [...new Set(arr.map(c => c.rank))].sort((a,b)=>b-a); 
+          if (u.includes(14)) u.push(isShort ? 5 : 1);
+          for (let i = 0; i <= u.length - 5; i++) { if (u[i] - u[i+4] === 4) return u[i]; } return 0;
+      };
+
+      let strHigh = checkStraight(cards);
+      let sfHigh = flushCards.length >= 5 ? checkStraight(flushCards) : 0;
+
+      const getCardsStr = (ranksArray, sourceCards = cards) => {
+          let res = []; let tempCards = [...sourceCards];
+          ranksArray.forEach(r => {
+              if (r === 1 && !isShort) r = 14; 
+              if (r === 5 && isShort) r = 14;
+              let idx = tempCards.findIndex(c => c.rank === r);
+              if(idx !== -1) { 
+                  let cardStr = tempCards[idx].str;
+                  if (holeCards.includes(cardStr)) {
+                      res.push(`<strong style="color:#ff3b3b;">[${cardStr}]</strong>`);
+                  } else {
+                      res.push(`[${cardStr}]`);
+                  }
+                  tempCards.splice(idx, 1); 
+              }
+          });
+          return res.join(' ');
+      };
+      const getStrRanks = (h) => [h, h-1, h-2, h-3, h-4];
+
+      if (sfHigh) return { value: getScore(9, [sfHigh,0,0,0,0]), name: "同花顺", cardsStr: getCardsStr(getStrRanks(sfHigh), flushCards) };
+      if (quads.length > 0) { let q = quads[0]; let k = cards.filter(c => c.rank !== q).map(c => c.rank); return { value: getScore(8, [q,q,q,q, k[0]]), name: "四条", cardsStr: getCardsStr([q,q,q,q,k[0]]) }; }
+      
+      if (isShort) {
+          if (flushCards.length >= 5) return { value: getScore(7, flushCards.map(c=>c.rank).slice(0,5)), name: "同花", cardsStr: getCardsStr(flushCards.map(c=>c.rank).slice(0,5), flushCards) };
+          if (trips.length > 0 && (pairs.length > 0 || trips.length > 1)) { let t = trips[0]; let p = trips.length > 1 ? trips[1] : pairs[0]; return { value: getScore(6, [t,t,t,p,p]), name: "葫芦", cardsStr: getCardsStr([t,t,t,p,p]) }; }
+      } else {
+          if (trips.length > 0 && (pairs.length > 0 || trips.length > 1)) { let t = trips[0]; let p = trips.length > 1 ? trips[1] : pairs[0]; return { value: getScore(7, [t,t,t,p,p]), name: "葫芦", cardsStr: getCardsStr([t,t,t,p,p]) }; }
+          if (flushCards.length >= 5) return { value: getScore(6, flushCards.map(c=>c.rank).slice(0,5)), name: "同花", cardsStr: getCardsStr(flushCards.map(c=>c.rank).slice(0,5), flushCards) };
+      }
+
+      if (strHigh) return { value: getScore(5, [strHigh,0,0,0,0]), name: "顺子", cardsStr: getCardsStr(getStrRanks(strHigh)) };
+      if (trips.length > 0) { let t = trips[0]; let k = cards.filter(c => c.rank !== t).map(c => c.rank); return { value: getScore(4, [t,t,t,k[0],k[1]]), name: "三条", cardsStr: getCardsStr([t,t,t,k[0],k[1]]) }; }
+      if (pairs.length >= 2) { let p1 = pairs[0], p2 = pairs[1]; let k = cards.filter(c => c.rank !== p1 && c.rank !== p2).map(c => c.rank); return { value: getScore(3, [p1,p1,p2,p2,k[0]]), name: "两对", cardsStr: getCardsStr([p1,p1,p2,p2,k[0]]) }; }
+      if (pairs.length === 1) { let p = pairs[0]; let k = cards.filter(c => c.rank !== p).map(c => c.rank); return { value: getScore(2, [p,p,k[0],k[1],k[2]]), name: "一对", cardsStr: getCardsStr([p,p,k[0],k[1],k[2]]) }; }
+      return { value: getScore(1, cards.map(c=>c.rank).slice(0,5)), name: "高牌", cardsStr: getCardsStr(cards.map(c=>c.rank).slice(0,5)) };
+  }
+
+  evaluateShowdown(activePlayers) {
+    this.game.status = "SHOWDOWN"; 
+    this.addLog(`<div style="margin-top:8px; color:#fff;">--- 亮牌决胜圈 ---</div>`);
+    
+    activePlayers.forEach(p => {
+        const fullHand = [...p.hand, ...this.game.board].map(c => this.parseCard(c));
+        p.finalScore = this.calculateHandRank(fullHand, p.hand);
+        p.hasShownCards = true; 
+        
+        const handStr = p.hand.join(' ');
+        this.addLog(`🃏 <span style="color:#ddd">${p.name.split('|')[1] || p.name}</span> 的底牌: <strong>[${handStr}]</strong> - ${p.finalScore.name}`);
+    });
+
+    // 【V38.5 核心防御：锁死玩家本局的初始投资额，防止平分漏洞】
+    let originalInvests = {};
+    let totalWinnings = {};
+    this.players.forEach(p => {
+        originalInvests[p.name] = p.investedThisHand || 0;
+        totalWinnings[p.name] = 0;
+    });
+    
+    let messages = []; let potNumber = 1;
+    let playersWithInvest = this.players.filter(p => p.investedThisHand > 0);
+    let loopGuard = 0; 
+    
+    while (playersWithInvest.length > 0 && loopGuard < 10) {
+        loopGuard++;
+        let activeInvestments = activePlayers.filter(p => p.investedThisHand > 0.01);
+        if (activeInvestments.length === 0) break; 
+
+        let minInvest = Math.min(...activeInvestments.map(p => p.investedThisHand));
+        let layerPot = 0; let eligiblePlayers = [];
+
+        this.players.forEach(p => {
+            if (p.investedThisHand > 0.01) {
+                let extract = Math.min(p.investedThisHand, minInvest);
+                p.investedThisHand -= extract; 
+                layerPot += extract;
+                if (activePlayers.includes(p) && Math.abs(extract - minInvest) < 0.01) eligiblePlayers.push(p);
+            }
+        });
+
+        layerPot = parseFloat(layerPot.toFixed(2));
+
+        if (eligiblePlayers.length === 1) {
+            let w = eligiblePlayers[0]; 
+            w.chips = parseFloat((w.chips + layerPot).toFixed(2)); 
+            
+            let m = `💸 ${w.name.split('|')[1] || w.name} 回收多余底池 $${layerPot}`;
+            messages.push(m); this.addLog(m);
+        } else if (eligiblePlayers.length > 1) {
+            let bestScore = -1; let winners = [];
+            eligiblePlayers.forEach(p => {
+                if (p.finalScore.value > bestScore) { bestScore = p.finalScore.value; winners = [p]; } 
+                else if (p.finalScore.value === bestScore) { winners.push(p); }
+            });
+            let splitAmt = parseFloat((layerPot / winners.length).toFixed(2)); let winnerNames = [];
+            
+            winners.forEach(w => {
+                w.chips = parseFloat((w.chips + splitAmt).toFixed(2)); 
+                w.winAmount = parseFloat(((w.winAmount || 0) + splitAmt).toFixed(2));
+                
+                // 【V38.5：记录玩家分到的钱】
+                totalWinnings[w.name] = (totalWinnings[w.name] || 0) + splitAmt;
+
+                winnerNames.push(`<span style="color:var(--gold)">${w.name.split('|')[1] || w.name}</span>`);
+
+                if (this.game.enableTwoSeven && !this.game.enableShortDeck) {
+                    let ranks = w.hand.map(c => this.parseCard(c).rank);
+                    if (ranks.includes(2) && ranks.includes(7)) {
+                        let bountyTotal = 0;
+                        this.players.forEach(other => {
+                            if (other.name !== w.name && !other.isKicked && !other.isSpectating && other.seatIndex !== -1) {
+                                let deduction = Math.max(0, Math.min(1, other.chips)); 
+                                other.chips = parseFloat((other.chips - deduction).toFixed(2));
+                                bountyTotal += deduction;
+                            }
+                        });
+                        bountyTotal = parseFloat(bountyTotal.toFixed(2));
+                        if (bountyTotal > 0) {
+                            w.chips = parseFloat((w.chips + bountyTotal).toFixed(2));
+                            w.winAmount = parseFloat(((w.winAmount || 0) + bountyTotal).toFixed(2));
+                            messages.push(`🧨 <strong style="color:#e74c3c;">[2-7 炸鱼成功]</strong> ${w.name.split('|')[1] || w.name} 赢得了全桌罚金 $${bountyTotal}！`);
+                            this.triggerBroadcast('bounty', `🧨 炸鱼狂欢！<span class="highlight">【${w.name.split('|')[1] || w.name}】</span> 手握 2-7 绝杀，狂揽全桌罚金 <span class="highlight">$${bountyTotal}</span>！`);
+                        }
+                    }
+                }
+            });
+            const potName = potNumber === 1 ? "主池" : `边池 ${potNumber-1}`;
+            
+            let m = winners.length === 1 
+                ? `🎉 <strong>${potName}</strong>: ${winnerNames[0]} 以 [${winners[0].finalScore.name}] - ${winners[0].finalScore.cardsStr} 赢得 $${layerPot}` 
+                : `⚖️ <strong>${potName}</strong>: ${winnerNames.join(", ")} 平分 $${layerPot} (牌型: [${winners[0].finalScore.name}] - ${winners[0].finalScore.cardsStr})`;
+            
+            messages.push(m); this.addLog(m); potNumber++;
+        }
+        playersWithInvest = this.players.filter(p => p.investedThisHand > 0.01);
+    }
+
+    // 【V38.5 最终结算查账：只有真正的盈利，才能免除水鬼状态！】
+    this.players.forEach(p => {
+        if (totalWinnings[p.name] > originalInvests[p.name]) {
+            p.isWinner = true;
+            p.isStanding = false;
+        }
+    });
+
+    this.game.winMessage = messages.join("<br>");
+    this.players.forEach(p => p.investedThisHand = 0); 
+    
+    this.checkStandUpEnd(); 
+    this.broadcastState();
+  }
+
+  checkAndTriggerBot() {
+    if (this.game.status === "LOBBY" || this.game.status === "SHOWDOWN" || this.game.status === "WAITING" || this.game.status === "DRAWING" || this.game.status === "PICK_SEAT") return;
+    let curr = this.players.find(x => x.seatIndex === this.game.turnIndex);
+    if (curr && curr.isBot && !curr.folded && curr.chips > 0) {
+      setTimeout(async () => {
+        if (this.game.status === "SHOWDOWN" || this.game.turnIndex !== curr.seatIndex) return;
+        let callAmt = Math.max(0, this.game.currentBet - curr.betThisRound);
+        
+        if (callAmt === 0) { await this.processPlayerAction(curr, "CALL", 0); } 
+        else {
+            let debtRatio = callAmt / (curr.chips + curr.betThisRound);
+            if (debtRatio <= 0.15) { if (Math.random() < 0.8) await this.processPlayerAction(curr, "CALL", 0); else await this.processPlayerAction(curr, "FOLD", 0); } 
+            else { if (Math.random() < 0.3) await this.processPlayerAction(curr, "CALL", 0); else await this.processPlayerAction(curr, "FOLD", 0); }
+        }
+      }, Math.floor(Math.random() * 2000) + 1500);
+    }
+  }
+
+  broadcastState() {
+    this.game.pot = parseFloat(this.players.reduce((s,p) => s + p.investedThisHand, 0).toFixed(2));
+    this.sessions.forEach(s => {
+        try { s.send(JSON.stringify({ status: this.game.status, players: this.players, game: this.game })); } catch(e){}
+    });
+  }
+}
